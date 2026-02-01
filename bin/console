@@ -1,0 +1,38 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+require_once dirname(__DIR__) . '/vendor/autoload.php';
+
+$basePath = dirname(__DIR__);
+$envFile = $basePath . '/.env';
+if (file_exists($envFile)) {
+    foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
+        if (strpos(trim($line), '#') === 0) continue;
+        if (strpos($line, '=') !== false) {
+            [$name, $value] = explode('=', $line, 2);
+            $_ENV[trim($name)] = trim($value, " \t\n\r\0\x0B\"'");
+        }
+    }
+}
+
+$args = $argv;
+array_shift($args);
+$command = $args[0] ?? '';
+
+switch ($command) {
+    case 'health':
+        echo json_encode(['status' => 'ok', 'timestamp' => date('c')], JSON_PRETTY_PRINT) . "\n";
+        exit(0);
+    case 'routes:list':
+        $router = require $basePath . '/routes/web.php';
+        echo "GET  /\nGET  /health\n";
+        exit(0);
+    case '':
+        echo "Tilgjengelige kommandoer:\n  health\n  routes:list\n";
+        exit(0);
+    default:
+        fwrite(STDERR, "Ukjent kommando: $command\n");
+        exit(1);
+}

@@ -1,0 +1,20 @@
+# Dependencies
+vendor/
+
+# Environment
+.env
+
+# Runtime
+logs/
+tmp/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo

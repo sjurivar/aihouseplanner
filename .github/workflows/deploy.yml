@@ -1,0 +1,24 @@
+name: Deploy via Deploy-Admin
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref (branch or tag) to deploy
+        required: true
+        default: main
+
+jobs:
+  deploy:
+    uses: sjurivar/ci-templates/.github/workflows/deploy-admin-ftp.yml@v1
+    with:
+      ref: ${{ github.event.inputs.ref || github.ref_name }}
+      manifest_path: deploy-manifest.json
+      checkout_submodules: true
+      composer_install: true
+    secrets:
+      DEPLOY_ADMIN_API_BASE_URL: ${{ secrets.DEPLOY_ADMIN_API_BASE_URL }}
+      DEPLOY_ADMIN_ADMIN_KEY: ${{ secrets.DEPLOY_ADMIN_ADMIN_KEY }}
+      PAT_TOKEN: ${{ secrets.PAT_TOKEN }}

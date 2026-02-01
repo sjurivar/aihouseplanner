@@ -1,0 +1,16 @@
+name: Standard-sjekk
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kjør standard-sjekk
+        run: chmod +x tools/standard-check.sh && ./tools/standard-check.sh

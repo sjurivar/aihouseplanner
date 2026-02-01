@@ -1,0 +1,218 @@
+/**
+ * 3D rendering with Three.js
+ */
+
+import * as THREE from 'three';
+import { OrbitControls } from '../vendor/OrbitControls.js';
+import { scene3d, renderer3d, camera3d, controls3d, set3DContext } from './state.js';
+import { isV05, isV1 } from './parse.js';
+
+export function init3D() {
+    const canvas = document.getElementById('canvas3d');
+    if (!canvas) return;
+    const w = Math.max(canvas.clientWidth || 400, 1);
+    const h = Math.max(canvas.clientHeight || 280, 1);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0xb8d4e8);
+    const camera = new THREE.PerspectiveCamera(50, w / h, 1, 100000);
+    camera.position.set(15, 10, 15);
+    camera.lookAt(0, 0, 0);
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+    renderer.setSize(w, h);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    const controls = new OrbitControls(camera, canvas);
+    controls.enableDamping = true;
+    set3DContext(scene, renderer, camera, controls);
+    scene.add(new THREE.AmbientLight(0x404060));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(10000, 20000, 10000);
+    scene.add(dirLight);
+
+    function resize3D() {
+        if (!canvas || !renderer || !camera) return;
+        const w = Math.max(canvas.clientWidth || 400, 1);
+        const h = Math.max(canvas.clientHeight || 280, 1);
+        renderer.setSize(w, h);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resize3D);
+    const canvasWrap = document.getElementById('canvas3dWrap');
+    if (canvasWrap && typeof ResizeObserver !== 'undefined') {
+        new ResizeObserver(resize3D).observe(canvasWrap);
+    }
+    animate3d();
+}
+
+function animate3d() {
+    requestAnimationFrame(animate3d);
+    if (controls3d) controls3d.update();
+    if (renderer3d && scene3d && camera3d) renderer3d.render(scene3d, camera3d);
+}
+
+export function clearScene() {
+    if (!scene3d) return;
+    while (scene3d.children.length > 0) {
+        const c = scene3d.children[0];
+        scene3d.remove(c);
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) {
+            if (Array.isArray(c.material)) c.material.forEach(m => m.dispose());
+            else c.material.dispose();
+        }
+    }
+    scene3d.add(new THREE.AmbientLight(0x404060));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(10000, 20000, 10000);
+    scene3d.add(dirLight);
+}
+
+function addGroundAndHorizon() {
+    if (!scene3d) return;
+    const groundMat = new THREE.MeshBasicMaterial({ color: 0xd4c4a8, side: THREE.DoubleSide });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.position.y = -1;
+    scene3d.add(ground);
+    const horizonLineGeo = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(-200, 0, -150),
+        new THREE.Vector3(200, 0, -150),
+    ]);
+    const horizonMat = new THREE.LineBasicMaterial({ color: 0x6b7b8c });
+    const horizonLine = new THREE.Line(horizonLineGeo, horizonMat);
+    scene3d.add(horizonLine);
+}
+
+function buildRoofMeshes(roofSpec, topElevation, width, depth) {
+    const meshes = [];
+    if (!roofSpec || roofSpec.type !== 'gable') return meshes;
+    const scale = 0.001;
+    const pitch = (roofSpec.pitch_degrees ?? 35) * Math.PI / 180;
+    const overhang = (roofSpec.overhang_mm ?? 500) * scale;
+    const thick = (roofSpec.thickness_mm ?? 200) * scale;
+    const ridgeDir = roofSpec.ridge_direction ?? 'x';
+    const w = width * scale + overhang * 2;
+    const d = depth * scale + overhang * 2;
+    const halfRidgeH = Math.tan(pitch) * (ridgeDir === 'x' ? d / 2 : w / 2);
+
+    const mat = new THREE.MeshLambertMaterial({ color: 0x8b4513, side: THREE.DoubleSide });
+    const ridgeLen = ridgeDir === 'x' ? w : d;
+    const slopeLen = ridgeDir === 'x' ? d / 2 : w / 2;
+    const slopeW = Math.sqrt(slopeLen * slopeLen + halfRidgeH * halfRidgeH);
+    const geom = new THREE.BoxGeometry(ridgeDir === 'x' ? ridgeLen : slopeW * 2, thick, ridgeDir === 'x' ? slopeW * 2 : ridgeLen);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(0, topElevation + halfRidgeH, 0);
+    mesh.rotation.x = ridgeDir === 'x' ? -pitch : 0;
+    mesh.rotation.z = ridgeDir === 'y' ? -pitch : 0;
+    meshes.push(mesh);
+    return meshes;
+}
+
+export function rebuild3D(allFloors, roofSpec, plan) {
+    clearScene();
+    if (!allFloors?.length) return;
+    // v0.5/v1: 3D not implemented for polygon footprint / rooms-only
+    if ((isV05(plan) || (isV1(plan) && !allFloors[0]?.footprint?.width))) {
+        const msg = document.createElement('div');
+        msg.textContent = '3D not implemented for v0.5/v1 yet';
+        msg.style.cssText = 'color:#999;padding:2rem;text-align:center;';
+        const canvas = document.getElementById('canvas3d');
+        if (canvas?.parentNode) {
+            canvas.style.display = 'none';
+            const wrap = canvas.parentNode;
+            if (!wrap.querySelector('[data-v1-msg]')) {
+                const d = document.createElement('div');
+                d.setAttribute('data-v1-msg', '1');
+                d.appendChild(msg);
+                wrap.appendChild(d);
+            }
+        }
+        return;
+    }
+    const canvas = document.getElementById('canvas3d');
+    if (canvas) canvas.style.display = 'block';
+    const v1Msg = document.querySelector('[data-v1-msg]');
+    if (v1Msg) v1Msg.remove();
+
+    const scale = 0.001;
+    const matWall = new THREE.MeshLambertMaterial({ color: 0xcccccc });
+    const matFloor = new THREE.MeshLambertMaterial({ color: 0xdddddd });
+    let topY = 0;
+    let lastW = 8000, lastD = 8000;
+
+    const meshByPath = {};
+    let fi = 0;
+    for (const root of allFloors) {
+        const fp = root.footprint;
+        const w = (fp?.width ?? 8000) * scale;
+        const d = (fp?.depth ?? 8000) * scale;
+        const tw = (root.wall?.thickness ?? 200) * scale;
+        const th = (root.wall?.height ?? 2700) * scale;
+        const elev = (root.elevation_mm ?? 0) * scale;
+        topY = elev + th;
+        lastW = (fp?.width ?? 8000);
+        lastD = (fp?.depth ?? 8000);
+        const path = `floors.${fi}`;
+
+        const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), matFloor.clone());
+        floorMesh.rotation.x = -Math.PI / 2;
+        floorMesh.position.set(0, elev, 0);
+        scene3d.add(floorMesh);
+        if (!meshByPath[path]) meshByPath[path] = [];
+        meshByPath[path].push(floorMesh);
+
+        const wallsLen = { front: w, back: w, left: d, right: d };
+        const wallNames = ['front', 'right', 'back', 'left'];
+        const wallSize = [[w, th, tw], [tw, th, d], [w, th, tw], [tw, th, d]];
+
+        for (let i = 0; i < 4; i++) {
+            const len = wallsLen[wallNames[i]];
+            const openings = (root.openings ?? []).filter(o => o.wall === wallNames[i]);
+            openings.sort((a, b) => (a.offset ?? 0) - (b.offset ?? 0));
+            let pos = 0;
+            const segs = [];
+            for (const o of openings) {
+                const oo = (o.offset ?? 0) * scale;
+                const ow = (o.width ?? 900) * scale;
+                if (oo > pos) segs.push({ start: pos, end: oo });
+                pos = oo + ow;
+            }
+            if (pos < len) segs.push({ start: pos, end: len });
+
+            const isX = wallNames[i] === 'front' || wallNames[i] === 'back';
+            const [pw, ph, pd] = wallSize[i];
+            for (const seg of segs) {
+                const sw = (seg.end - seg.start);
+                const segW = isX ? sw : pw;
+                const segD = isX ? pd : sw;
+                const geom = new THREE.BoxGeometry(segW, ph, segD);
+                const mesh = new THREE.Mesh(geom, matWall.clone());
+                const cx = (seg.start + seg.end) / 2;
+                if (wallNames[i] === 'front') mesh.position.set(-w / 2 + cx, elev + th / 2, -d / 2 + tw / 2);
+                else if (wallNames[i] === 'back') mesh.position.set(-w / 2 + cx, elev + th / 2, d / 2 - tw / 2);
+                else if (wallNames[i] === 'left') mesh.position.set(-w / 2 + tw / 2, elev + th / 2, -d / 2 + cx);
+                else mesh.position.set(w / 2 - tw / 2, elev + th / 2, -d / 2 + cx);
+                scene3d.add(mesh);
+                if (!meshByPath[path]) meshByPath[path] = [];
+                meshByPath[path].push(mesh);
+            }
+        }
+        fi++;
+    }
+
+    scene3d.userData.meshesByPath = meshByPath;
+
+    if (roofSpec) {
+        buildRoofMeshes(roofSpec, topY, lastW, lastD).forEach(m => scene3d.add(m));
+    }
+
+    addGroundAndHorizon();
+    const canvasEl = document.getElementById('canvas3d');
+    if (canvasEl && renderer3d) {
+        const cw = Math.max(canvasEl.clientWidth || 400, 1);
+        const ch = Math.max(canvasEl.clientHeight || 280, 1);
+        renderer3d.setSize(cw, ch);
+        camera3d.aspect = cw / ch;
+        camera3d.updateProjectionMatrix();
+    }
+}

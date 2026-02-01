@@ -1,0 +1,41 @@
+{
+  "units": "mm",
+  "footprint": {
+    "type": "rect",
+    "width": 8000,
+    "depth": 6000
+  },
+  "wall": {
+    "thickness": 200,
+    "height": 2700
+  },
+  "openings": [
+    {
+      "id": "d1",
+      "wall": "front",
+      "type": "door",
+      "offset": 3000,
+      "width": 900,
+      "height": 2100,
+      "swing": "in-right"
+    },
+    {
+      "id": "w1",
+      "wall": "front",
+      "type": "window",
+      "offset": 500,
+      "width": 1200,
+      "height": 1200,
+      "sill": 900
+    },
+    {
+      "id": "w2",
+      "wall": "back",
+      "type": "window",
+      "offset": 2000,
+      "width": 1500,
+      "height": 1200,
+      "sill": 900
+    }
+  ]
+}

@@ -1,0 +1,160 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aihouseplanner.local/schemas/building.plan.v1.schema.json",
+  "title": "BuildingPlanV1",
+  "description": "AI House Planner v1 building plan format — rooms, walls, stairs",
+  "type": "object",
+  "required": ["version", "units", "floors"],
+  "properties": {
+    "version": { "type": "string", "pattern": "^1" },
+    "units": { "type": "string", "const": "mm" },
+    "building": {
+      "type": "object",
+      "properties": { "name": { "type": "string" } }
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "wall": {
+          "type": "object",
+          "properties": {
+            "thickness_mm": { "type": "number", "minimum": 1, "maximum": 500 },
+            "height_mm": { "type": "number", "minimum": 1, "maximum": 6000 }
+          }
+        }
+      }
+    },
+    "floors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/FloorV1" }
+    },
+    "roof": {
+      "type": "object",
+      "properties": {
+        "type": { "type": "string", "const": "gable" },
+        "pitch_degrees": { "type": "number", "minimum": 5, "maximum": 60 },
+        "overhang_mm": { "type": "number", "minimum": 0, "maximum": 2000 },
+        "thickness_mm": { "type": "number", "minimum": 10, "maximum": 500 },
+        "ridge_direction": { "type": "string", "enum": ["x", "y"] },
+        "eave_height_mode": { "type": "string", "const": "top_walls" }
+      }
+    }
+  },
+  "$defs": {
+    "Footprint": {
+      "type": "object",
+      "required": ["type", "width", "depth"],
+      "properties": {
+        "type": { "type": "string", "const": "rect" },
+        "width": { "type": "number", "minimum": 1, "maximum": 100000 },
+        "depth": { "type": "number", "minimum": 1, "maximum": 100000 }
+      }
+    },
+    "FloorV1": {
+      "type": "object",
+      "required": ["id", "elevation_mm", "footprint"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "level": { "type": "integer" },
+        "elevation_mm": { "type": "number", "minimum": 0 },
+        "footprint": { "$ref": "#/$defs/Footprint" },
+        "rooms": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Room" }
+        },
+        "walls": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WallV1" }
+        },
+        "stairs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Stair" }
+        }
+      }
+    },
+    "Room": {
+      "type": "object",
+      "required": ["id", "polygon"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "polygon": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 3
+        },
+        "floor_finish": { "type": "string" },
+        "ceiling_height_mm": { "type": "number", "minimum": 1, "maximum": 6000 },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "WallV1": {
+      "type": "object",
+      "required": ["id", "type", "path"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["interior", "exterior"] },
+        "thickness_mm": { "type": "number", "minimum": 1, "maximum": 500 },
+        "height_mm": { "type": "number", "minimum": 1, "maximum": 6000 },
+        "path": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": { "type": "number" },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "minItems": 2
+        },
+        "joins": { "type": "string", "enum": ["miter"] },
+        "openings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/WallOpening" }
+        },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "WallOpening": {
+      "type": "object",
+      "required": ["id", "type", "at_mm", "width_mm", "height_mm"],
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string", "enum": ["door", "window"] },
+        "at_mm": { "type": "number", "minimum": 0 },
+        "width_mm": { "type": "number", "minimum": 1 },
+        "height_mm": { "type": "number", "minimum": 1 },
+        "sill_mm": { "type": "number", "minimum": 0 },
+        "swing": { "type": "string", "enum": ["in-left", "in-right", "out-left", "out-right"] }
+      }
+    },
+    "Stair": {
+      "type": "object",
+      "required": ["id", "from_floor_id", "to_floor_id", "type", "width_mm", "start", "direction_degrees"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "from_floor_id": { "type": "string" },
+        "to_floor_id": { "type": "string" },
+        "type": { "type": "string", "enum": ["straight", "l", "u"] },
+        "width_mm": { "type": "number", "minimum": 500, "maximum": 2000 },
+        "rise_mm": { "type": "number", "minimum": 100, "maximum": 250 },
+        "run_mm": { "type": "number", "minimum": 200, "maximum": 350 },
+        "start": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "direction_degrees": { "type": "number", "minimum": 0, "maximum": 360 },
+        "turn_landing_length_mm": { "type": "number", "minimum": 500, "maximum": 5000 },
+        "headroom_mm": { "type": "number", "minimum": 1800, "maximum": 4000 }
+      }
+    }
+  }
+}

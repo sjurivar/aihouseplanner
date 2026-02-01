@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://aihouseplanner.local/schemas/building.plan.schema.json",
+  "title": "BuildingPlan",
+  "description": "AI House Planner building plan format",
+  "type": "object",
+  "required": ["units"],
+  "properties": {
+    "units": {
+      "type": "string",
+      "const": "mm"
+    },
+    "defaults": {
+      "type": "object",
+      "properties": {
+        "wall": {
+          "$ref": "#/$defs/Wall"
+        }
+      }
+    },
+    "footprint": {
+      "$ref": "#/$defs/Footprint"
+    },
+    "wall": {
+      "$ref": "#/$defs/Wall"
+    },
+    "openings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Opening" }
+    },
+    "floors": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Floor" }
+    },
+    "roof": {
+      "$ref": "#/$defs/Roof"
+    }
+  },
+  "$defs": {
+    "Footprint": {
+      "type": "object",
+      "required": ["type", "width", "depth"],
+      "properties": {
+        "type": { "type": "string", "const": "rect" },
+        "width": { "type": "number", "minimum": 1, "maximum": 100000 },
+        "depth": { "type": "number", "minimum": 1, "maximum": 100000 }
+      }
+    },
+    "Wall": {
+      "type": "object",
+      "required": ["thickness", "height"],
+      "properties": {
+        "thickness": { "type": "number", "minimum": 1 },
+        "height": { "type": "number", "minimum": 1 }
+      }
+    },
+    "Opening": {
+      "type": "object",
+      "required": ["id", "wall", "type", "offset", "width", "height"],
+      "properties": {
+        "id": { "type": "string" },
+        "wall": { "type": "string", "enum": ["front", "right", "back", "left"] },
+        "type": { "type": "string", "enum": ["door", "window"] },
+        "offset": { "type": "number", "minimum": 0 },
+        "width": { "type": "number", "minimum": 1 },
+        "height": { "type": "number", "minimum": 1 },
+        "sill": { "type": "number", "minimum": 0 },
+        "swing": { "type": "string", "enum": ["in-left", "in-right", "out-left", "out-right"] }
+      }
+    },
+    "Floor": {
+      "type": "object",
+      "required": ["id", "name", "level", "elevation_mm", "footprint"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "level": { "type": "integer" },
+        "elevation_mm": { "type": "number", "minimum": 0 },
+        "footprint": { "$ref": "#/$defs/Footprint" },
+        "wall": { "$ref": "#/$defs/Wall" },
+        "openings": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Opening" }
+        }
+      }
+    },
+    "Roof": {
+      "type": "object",
+      "required": ["type", "pitch_degrees", "overhang_mm", "thickness_mm", "ridge_direction", "eave_height_mode"],
+      "properties": {
+        "type": { "type": "string", "const": "gable" },
+        "pitch_degrees": { "type": "number", "minimum": 5, "maximum": 60 },
+        "overhang_mm": { "type": "number", "minimum": 0, "maximum": 2000 },
+        "thickness_mm": { "type": "number", "minimum": 10, "maximum": 500 },
+        "ridge_direction": { "type": "string", "enum": ["x", "y"] },
+        "eave_height_mode": { "type": "string", "const": "top_walls" }
+      }
+    }
+  }
+}

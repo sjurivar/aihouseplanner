@@ -55,9 +55,13 @@ SQL_PATTERN='(SELECT|INSERT|UPDATE|DELETE)\s'
 for dir in "app/Http/Controllers" "app/Views"; do
     if [ -d "$dir" ]; then
         while IFS= read -r -d '' f; do
-            if grep -qiE "$SQL_PATTERN" "$f" 2>/dev/null; then
-                echo "  FEIL: SQL funnet i $f"
-                ERRORS=$((ERRORS + 1))
+            matches=$(grep -niE "$SQL_PATTERN" "$f" 2>/dev/null || true)
+            if [ -n "$matches" ]; then
+                bad=$(echo "$matches" | grep -vE '<select|</select>' || true)
+                if [ -n "$bad" ]; then
+                    echo "  FEIL: SQL funnet i $f"
+                    ERRORS=$((ERRORS + 1))
+                fi
             fi
         done < <(find "$dir" -type f \( -name "*.php" -o -name "*.html" \) -print0 2>/dev/null)
     fi

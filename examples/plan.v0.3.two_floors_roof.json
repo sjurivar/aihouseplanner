@@ -1,0 +1,90 @@
+{
+  "units": "mm",
+  "defaults": {
+    "wall": {
+      "thickness": 200,
+      "height": 2700
+    }
+  },
+  "floors": [
+    {
+      "id": "f1",
+      "name": "Kjeller",
+      "level": 0,
+      "elevation_mm": 0,
+      "footprint": {
+        "type": "rect",
+        "width": 10000,
+        "depth": 8000
+      },
+      "openings": [
+        {
+          "id": "d1",
+          "wall": "front",
+          "type": "door",
+          "offset": 4000,
+          "width": 900,
+          "height": 2100,
+          "swing": "in-right"
+        },
+        {
+          "id": "w1",
+          "wall": "right",
+          "type": "window",
+          "offset": 2000,
+          "width": 1200,
+          "height": 1200,
+          "sill": 900
+        }
+      ]
+    },
+    {
+      "id": "f2",
+      "name": "1. etasje",
+      "level": 1,
+      "elevation_mm": 3000,
+      "footprint": {
+        "type": "rect",
+        "width": 10000,
+        "depth": 8000
+      },
+      "openings": [
+        {
+          "id": "d2",
+          "wall": "front",
+          "type": "door",
+          "offset": 4500,
+          "width": 900,
+          "height": 2100,
+          "swing": "in-left"
+        },
+        {
+          "id": "w2",
+          "wall": "front",
+          "type": "window",
+          "offset": 1000,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900
+        },
+        {
+          "id": "w3",
+          "wall": "back",
+          "type": "window",
+          "offset": 3000,
+          "width": 1500,
+          "height": 1200,
+          "sill": 900
+        }
+      ]
+    }
+  ],
+  "roof": {
+    "type": "gable",
+    "pitch_degrees": 35,
+    "overhang_mm": 500,
+    "thickness_mm": 200,
+    "ridge_direction": "x",
+    "eave_height_mode": "top_walls"
+  }
+}

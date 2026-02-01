@@ -1,0 +1,389 @@
+{
+  "version": "0.5",
+  "units": "mm",
+  "meta": {
+    "name": "Rooms-first bygg med skråtak per rom + vegger med høydeprofil (sampled)",
+    "notes": [
+      "Ytterform: footprint + tak (gable, ridge).",
+      "Rom defineres per etasje (rooms-first).",
+      "Rom kan ha flat himling eller skrå himling som plan z(x,y)=a*x+b*y+c (med minZ/maxZ).",
+      "Innervegger genereres fra romgrenser og får heightProfile.samples + z[]",
+      "Vegghøyde per sample kan være min(z fra rom på begge sider).",
+      "Trapp er vertikalt objekt med levels:[L1,L2] og void i L2."
+    ]
+  },
+
+  "levels": [
+    { "id": "L1", "name": "1. etasje", "elevation": 0, "height": 2500 },
+    { "id": "L2", "name": "2. etasje", "elevation": 2500, "height": 2500 }
+  ],
+
+  "defaults": {
+    "wallRules": {
+      "interior": { "thickness": 98 },
+      "betweenUnits": { "thickness": 150, "tags": ["fire"] }
+    },
+    "openingDefaults": {
+      "doorHeight": 2100,
+      "windowHeight": 1200,
+      "windowSillHeight": 900
+    },
+    "wallSampling": { "samples": 5 }
+  },
+
+  "buildings": [
+    {
+      "id": "B1",
+      "name": "Demo bygg",
+      "levels": ["L1", "L2"],
+
+      "footprints": [
+        {
+          "id": "FP_L1",
+          "levelId": "L1",
+          "polygon": [
+            { "x": 0, "y": 0 },
+            { "x": 14000, "y": 0 },
+            { "x": 14000, "y": 10000 },
+            { "x": 0, "y": 10000 }
+          ],
+          "outerEdges": [
+            { "edgeIndex": 0, "id": "E_SOUTH", "name": "Sør", "role": "eave" },
+            { "edgeIndex": 1, "id": "E_EAST", "name": "Øst", "role": "gable" },
+            { "edgeIndex": 2, "id": "E_NORTH", "name": "Nord", "role": "eave" },
+            { "edgeIndex": 3, "id": "E_WEST", "name": "Vest", "role": "gable" }
+          ],
+          "outerWall": { "thickness": 250, "height": 2500, "material": "wood_frame" }
+        },
+        {
+          "id": "FP_L2",
+          "levelId": "L2",
+          "polygon": [
+            { "x": 0, "y": 0 },
+            { "x": 14000, "y": 0 },
+            { "x": 14000, "y": 10000 },
+            { "x": 0, "y": 10000 }
+          ],
+          "outerWall": { "thickness": 250, "height": 2500, "material": "wood_frame" }
+        }
+      ],
+
+      "units": [
+        { "id": "U_MAIN", "name": "Hoveddel", "levelIds": ["L1", "L2"] }
+      ],
+
+      "rooms": [
+        {
+          "id": "R_L1_LIVING",
+          "name": "Stue/kjøkken",
+          "type": "living_kitchen",
+          "unitId": "U_MAIN",
+          "levelId": "L1",
+          "polygon": [
+            { "x": 0, "y": 0 },
+            { "x": 9000, "y": 0 },
+            { "x": 9000, "y": 5200 },
+            { "x": 0, "y": 5200 }
+          ],
+          "ceiling": { "type": "flat", "height": 2400 }
+        },
+        {
+          "id": "R_L1_ENTRY",
+          "name": "Entré/gang",
+          "type": "hall",
+          "unitId": "U_MAIN",
+          "levelId": "L1",
+          "polygon": [
+            { "x": 9000, "y": 0 },
+            { "x": 14000, "y": 0 },
+            { "x": 14000, "y": 2600 },
+            { "x": 9000, "y": 2600 }
+          ],
+          "ceiling": { "type": "flat", "height": 2400 }
+        },
+        {
+          "id": "R_L1_STAIR_ZONE",
+          "name": "Trappesone",
+          "type": "stair_zone",
+          "unitId": "U_MAIN",
+          "levelId": "L1",
+          "polygon": [
+            { "x": 9000, "y": 2600 },
+            { "x": 14000, "y": 2600 },
+            { "x": 14000, "y": 5200 },
+            { "x": 9000, "y": 5200 }
+          ],
+          "ceiling": { "type": "flat", "height": 2500 }
+        },
+        {
+          "id": "R_L1_BATH",
+          "name": "Bad",
+          "type": "bathroom",
+          "unitId": "U_MAIN",
+          "levelId": "L1",
+          "polygon": [
+            { "x": 0, "y": 5200 },
+            { "x": 4200, "y": 5200 },
+            { "x": 4200, "y": 7600 },
+            { "x": 0, "y": 7600 }
+          ],
+          "tags": ["wetroom"],
+          "ceiling": { "type": "flat", "height": 2400 }
+        },
+        {
+          "id": "R_L1_BED",
+          "name": "Soverom nede",
+          "type": "bedroom",
+          "unitId": "U_MAIN",
+          "levelId": "L1",
+          "polygon": [
+            { "x": 4200, "y": 5200 },
+            { "x": 9000, "y": 5200 },
+            { "x": 9000, "y": 7600 },
+            { "x": 4200, "y": 7600 }
+          ],
+          "ceiling": { "type": "flat", "height": 2400 }
+        },
+        {
+          "id": "R_L1_UTILITY",
+          "name": "Teknisk/bod",
+          "type": "utility",
+          "unitId": "U_MAIN",
+          "levelId": "L1",
+          "polygon": [
+            { "x": 9000, "y": 5200 },
+            { "x": 14000, "y": 5200 },
+            { "x": 14000, "y": 7600 },
+            { "x": 9000, "y": 7600 }
+          ],
+          "ceiling": { "type": "flat", "height": 2400 }
+        },
+        {
+          "id": "R_L2_LOFT_LIVING",
+          "name": "Stue oppe (skråtak)",
+          "type": "living_loft",
+          "unitId": "U_MAIN",
+          "levelId": "L2",
+          "polygon": [
+            { "x": 0, "y": 0 },
+            { "x": 9000, "y": 0 },
+            { "x": 9000, "y": 5200 },
+            { "x": 0, "y": 5200 }
+          ],
+          "ceiling": {
+            "type": "plane",
+            "z": { "a": 0.0, "b": -0.18, "c": 4300 },
+            "minZ": 2400,
+            "maxZ": 4300
+          }
+        },
+        {
+          "id": "R_L2_HALL",
+          "name": "Gang oppe",
+          "type": "hall",
+          "unitId": "U_MAIN",
+          "levelId": "L2",
+          "polygon": [
+            { "x": 9000, "y": 0 },
+            { "x": 14000, "y": 0 },
+            { "x": 14000, "y": 2600 },
+            { "x": 9000, "y": 2600 }
+          ],
+          "ceiling": { "type": "flat", "height": 2400 }
+        },
+        {
+          "id": "R_L2_STAIR_LANDING",
+          "name": "Trapperepos",
+          "type": "stair_landing",
+          "unitId": "U_MAIN",
+          "levelId": "L2",
+          "polygon": [
+            { "x": 9000, "y": 2600 },
+            { "x": 14000, "y": 2600 },
+            { "x": 14000, "y": 4200 },
+            { "x": 9000, "y": 4200 }
+          ],
+          "ceiling": { "type": "flat", "height": 2500 }
+        },
+        {
+          "id": "R_L2_BED1",
+          "name": "Soverom 1",
+          "type": "bedroom",
+          "unitId": "U_MAIN",
+          "levelId": "L2",
+          "polygon": [
+            { "x": 0, "y": 5200 },
+            { "x": 4500, "y": 5200 },
+            { "x": 4500, "y": 7600 },
+            { "x": 0, "y": 7600 }
+          ],
+          "ceiling": { "type": "plane", "z": { "a": 0.0, "b": -0.12, "c": 3600 }, "minZ": 2400, "maxZ": 3600 }
+        },
+        {
+          "id": "R_L2_BED2",
+          "name": "Soverom 2",
+          "type": "bedroom",
+          "unitId": "U_MAIN",
+          "levelId": "L2",
+          "polygon": [
+            { "x": 4500, "y": 5200 },
+            { "x": 9000, "y": 5200 },
+            { "x": 9000, "y": 7600 },
+            { "x": 4500, "y": 7600 }
+          ],
+          "ceiling": { "type": "plane", "z": { "a": 0.0, "b": -0.12, "c": 3600 }, "minZ": 2400, "maxZ": 3600 }
+        },
+        {
+          "id": "R_L2_BATH",
+          "name": "Bad oppe",
+          "type": "bathroom",
+          "unitId": "U_MAIN",
+          "levelId": "L2",
+          "polygon": [
+            { "x": 9000, "y": 4200 },
+            { "x": 14000, "y": 4200 },
+            { "x": 14000, "y": 5200 },
+            { "x": 9000, "y": 5200 }
+          ],
+          "tags": ["wetroom"],
+          "ceiling": { "type": "flat", "height": 2400 }
+        }
+      ],
+
+      "stairs": [
+        {
+          "id": "S1",
+          "name": "Hovedtrapp",
+          "type": "U",
+          "fromLevelId": "L1",
+          "toLevelId": "L2",
+          "levels": ["L1", "L2"],
+          "origin": { "x": 10400, "y": 3100 },
+          "direction": 90,
+          "runWidth": 1000,
+          "risers": 175,
+          "tread": 260,
+          "landingDepth": 1200
+        }
+      ],
+
+      "voids": [
+        {
+          "id": "VOID_S1_L2",
+          "name": "Trappeåpning (L2)",
+          "type": "stair_void",
+          "levelId": "L2",
+          "sourceStairId": "S1",
+          "polygon": [
+            { "x": 9600, "y": 2600 },
+            { "x": 13200, "y": 2600 },
+            { "x": 13200, "y": 4200 },
+            { "x": 9600, "y": 4200 }
+          ]
+        }
+      ],
+
+      "openings": [
+        {
+          "id": "D_MAIN",
+          "name": "Hovedinngang",
+          "kind": "door",
+          "levelId": "L1",
+          "host": { "type": "outerEdge", "footprintId": "FP_L1", "edgeId": "E_SOUTH" },
+          "offset": 11000,
+          "width": 1000,
+          "height": 2100
+        },
+        {
+          "id": "W_L1_LIVING",
+          "name": "Vindu stue nede",
+          "kind": "window",
+          "levelId": "L1",
+          "host": { "type": "outerEdge", "footprintId": "FP_L1", "edgeId": "E_SOUTH" },
+          "offset": 2500,
+          "width": 1800,
+          "height": 1200,
+          "sillHeight": 900
+        }
+      ],
+
+      "roofs": [
+        {
+          "id": "R1",
+          "name": "Saltak",
+          "type": "gable",
+          "levelId": "L2",
+          "source": { "type": "footprint", "footprintId": "FP_L1" },
+          "pitchDegrees": 27,
+          "overhang": 450,
+          "eaveHeight": 2500,
+          "ridge": {
+            "a": { "x": 7000, "y": -500 },
+            "b": { "x": 7000, "y": 10500 }
+          }
+        }
+      ],
+
+      "derived": {
+        "walls_L1": [
+          {
+            "id": "W_L1_0001",
+            "levelId": "L1",
+            "a": { "x": 9000, "y": 0 },
+            "b": { "x": 9000, "y": 5200 },
+            "wallType": "interior",
+            "thickness": 98,
+            "rooms": ["R_L1_LIVING", "R_L1_ENTRY"],
+            "heightProfile": { "type": "constant", "z": 2400 }
+          }
+        ],
+        "walls_L2": [
+          {
+            "id": "W_L2_0001",
+            "levelId": "L2",
+            "a": { "x": 9000, "y": 0 },
+            "b": { "x": 9000, "y": 5200 },
+            "wallType": "interior",
+            "thickness": 98,
+            "rooms": ["R_L2_LOFT_LIVING", "R_L2_HALL"],
+            "heightProfile": {
+              "type": "sampled",
+              "samples": 5,
+              "z": [2400, 2700, 3000, 3300, 3600],
+              "rule": "min(ceiling(A), ceiling(B)) per sample"
+            }
+          },
+          {
+            "id": "W_L2_0002",
+            "levelId": "L2",
+            "a": { "x": 0, "y": 5200 },
+            "b": { "x": 9000, "y": 5200 },
+            "wallType": "interior",
+            "thickness": 98,
+            "rooms": ["R_L2_LOFT_LIVING", "R_L2_BED1"],
+            "heightProfile": {
+              "type": "sampled",
+              "samples": 5,
+              "z": [2400, 2400, 2400, 2400, 2400],
+              "rule": "min(ceiling(A), ceiling(B)) per sample"
+            }
+          }
+        ]
+      }
+    }
+  ],
+
+  "implementationHints": {
+    "wallGeneration": [
+      "Extract segments from room polygons per level; snap to EPS; match shared segments; split partially-overlapping segments if needed.",
+      "Classify wallType: betweenUnits when unitId differs; otherwise interior.",
+      "Compute heightProfile: if both rooms flat -> constant; else sample N points along segment and compute z(x,y)=a*x+b*y+c for ceiling.type=plane.",
+      "Clamp each sampled z with room ceiling minZ/maxZ; if 2 rooms share wall use per-sample min().",
+      "3D: build wall mesh as strip with varying top edge from heightProfile."
+    ],
+    "ceilingPlanes": [
+      "Plane is expressed in mm: z = a*x + b*y + c. With a,b as slopes (mm/mm).",
+      "For a gable roof you can derive a,b,c from ridge direction + pitch later (ceiling.type=planeFromRidge)."
+    ]
+  }
+}

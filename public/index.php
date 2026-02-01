@@ -22,6 +22,10 @@ if (file_exists($envFile)) {
 
 $router = require $basePath . '/routes/web.php';
 $requestUri = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
+$basePathEnv = $_ENV['BASE_PATH'] ?? '';
+if ($basePathEnv !== '' && str_starts_with($requestUri, $basePathEnv)) {
+    $requestUri = substr($requestUri, strlen($basePathEnv)) ?: '/';
+}
 $method = $_SERVER['REQUEST_METHOD'] ?? 'GET';
 
 $response = $router->dispatch($method, $requestUri);

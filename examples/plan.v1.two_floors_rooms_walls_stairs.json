@@ -1,0 +1,233 @@
+{
+  "version": "1.0",
+  "units": "mm",
+  "building": { "name": "Eksempelhus v1" },
+  "defaults": {
+    "wall": { "thickness_mm": 200, "height_mm": 2700 }
+  },
+  "floors": [
+    {
+      "id": "F1",
+      "name": "1. etasje",
+      "level": 1,
+      "elevation_mm": 0,
+      "footprint": { "type": "rect", "width": 9000, "depth": 7000 },
+      "rooms": [
+        {
+          "id": "R1",
+          "name": "Stue",
+          "polygon": [[0, 0], [4500, 0], [4500, 3500], [0, 3500]],
+          "floor_finish": "wood",
+          "ceiling_height_mm": 2600,
+          "tags": ["common"]
+        },
+        {
+          "id": "R2",
+          "name": "Kjøkken",
+          "polygon": [[4500, 0], [9000, 0], [9000, 3500], [4500, 3500]],
+          "floor_finish": "tile",
+          "ceiling_height_mm": 2600,
+          "tags": ["common"]
+        },
+        {
+          "id": "R3",
+          "name": "Bad",
+          "polygon": [[0, 3500], [2500, 3500], [2500, 7000], [0, 7000]],
+          "floor_finish": "tile",
+          "ceiling_height_mm": 2400,
+          "tags": ["wet"]
+        },
+        {
+          "id": "R4",
+          "name": "Soverom 1",
+          "polygon": [[2500, 3500], [5500, 3500], [5500, 7000], [2500, 7000]],
+          "floor_finish": "wood",
+          "ceiling_height_mm": 2600,
+          "tags": ["private"]
+        },
+        {
+          "id": "R5",
+          "name": "Gang / Soverom 2",
+          "polygon": [[5500, 3500], [9000, 3500], [9000, 7000], [5500, 7000]],
+          "floor_finish": "wood",
+          "ceiling_height_mm": 2600,
+          "tags": ["common"]
+        }
+      ],
+      "walls": [
+        {
+          "id": "W1",
+          "type": "interior",
+          "thickness_mm": 98,
+          "height_mm": 2600,
+          "path": [[4500, 0], [4500, 3500]],
+          "joins": "miter",
+          "openings": [
+            {
+              "id": "W1-D1",
+              "type": "door",
+              "at_mm": 1500,
+              "width_mm": 900,
+              "height_mm": 2100,
+              "swing": "in-right"
+            }
+          ],
+          "tags": ["loadbearing"]
+        },
+        {
+          "id": "W2",
+          "type": "interior",
+          "thickness_mm": 98,
+          "height_mm": 2600,
+          "path": [[0, 3500], [9000, 3500]],
+          "joins": "miter",
+          "openings": [
+            {
+              "id": "W2-D1",
+              "type": "door",
+              "at_mm": 1200,
+              "width_mm": 900,
+              "height_mm": 2100,
+              "swing": "in-right"
+            },
+            {
+              "id": "W2-D2",
+              "type": "door",
+              "at_mm": 3800,
+              "width_mm": 900,
+              "height_mm": 2100,
+              "swing": "in-left"
+            },
+            {
+              "id": "W2-D3",
+              "type": "door",
+              "at_mm": 6300,
+              "width_mm": 900,
+              "height_mm": 2100,
+              "swing": "in-right"
+            }
+          ],
+          "tags": []
+        },
+        {
+          "id": "W3",
+          "type": "interior",
+          "thickness_mm": 98,
+          "path": [[2500, 3500], [2500, 7000]],
+          "openings": [],
+          "tags": []
+        },
+        {
+          "id": "W4",
+          "type": "interior",
+          "thickness_mm": 98,
+          "path": [[5500, 3500], [5500, 7000]],
+          "openings": [
+            {
+              "id": "W4-D1",
+              "type": "door",
+              "at_mm": 500,
+              "width_mm": 800,
+              "height_mm": 2100,
+              "swing": "in-right"
+            }
+          ],
+          "tags": []
+        }
+      ],
+      "stairs": [
+        {
+          "id": "S1",
+          "name": "Hovedtrapp",
+          "from_floor_id": "F1",
+          "to_floor_id": "F2",
+          "type": "straight",
+          "width_mm": 900,
+          "rise_mm": 175,
+          "run_mm": 250,
+          "start": [1500, 6000],
+          "direction_degrees": 90,
+          "headroom_mm": 2000
+        }
+      ]
+    },
+    {
+      "id": "F2",
+      "name": "2. etasje",
+      "level": 2,
+      "elevation_mm": 3000,
+      "footprint": { "type": "rect", "width": 9000, "depth": 7000 },
+      "rooms": [
+        {
+          "id": "R6",
+          "name": "Stor stue",
+          "polygon": [[0, 0], [6000, 0], [6000, 4000], [0, 4000]],
+          "floor_finish": "wood",
+          "ceiling_height_mm": 2600,
+          "tags": ["common"]
+        },
+        {
+          "id": "R7",
+          "name": "Bad",
+          "polygon": [[6000, 0], [9000, 0], [9000, 2500], [6000, 2500]],
+          "floor_finish": "tile",
+          "ceiling_height_mm": 2400,
+          "tags": ["wet"]
+        },
+        {
+          "id": "R8",
+          "name": "Soverom",
+          "polygon": [[0, 4000], [9000, 4000], [9000, 7000], [0, 7000]],
+          "floor_finish": "wood",
+          "ceiling_height_mm": 2600,
+          "tags": ["private"]
+        }
+      ],
+      "walls": [
+        {
+          "id": "W5",
+          "type": "interior",
+          "thickness_mm": 98,
+          "path": [[6000, 0], [6000, 2500]],
+          "openings": [
+            {
+              "id": "W5-D1",
+              "type": "door",
+              "at_mm": 800,
+              "width_mm": 800,
+              "height_mm": 2100,
+              "swing": "in-left"
+            }
+          ],
+          "tags": []
+        },
+        {
+          "id": "W6",
+          "type": "interior",
+          "thickness_mm": 98,
+          "path": [[0, 4000], [9000, 4000]],
+          "openings": [
+            {
+              "id": "W6-D1",
+              "type": "door",
+              "at_mm": 1500,
+              "width_mm": 900,
+              "height_mm": 2100,
+              "swing": "in-right"
+            }
+          ],
+          "tags": []
+        }
+      ],
+      "stairs": []
+    }
+  ],
+  "roof": {
+    "type": "gable",
+    "pitch_degrees": 35,
+    "overhang_mm": 500,
+    "thickness_mm": 200,
+    "ridge_direction": "x",
+    "eave_height_mode": "top_walls"
+  }
+}

@@ -84,6 +84,7 @@
     "pitch_degrees": 35,
     "overhang_mm": 500,
     "ridge_offset_mm": 0,
+    "ridge_mode": "equal_pitch",
     "ridge_direction": "x",
     "eave_height_mm": 2700,
     "material": "tiles"

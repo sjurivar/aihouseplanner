@@ -27,7 +27,8 @@
                     <option value="">— velg —</option>
                     <option value="v0">v0 (enkel etasje)</option>
                     <option value="v0.3">v0.3 (symmetrisk tak)</option>
-                    <option value="v0.3-asym">v0.3 (asymmetrisk tak)</option>
+                    <option value="v0.3-asym-pitch">v0.3 (asym. lik takvinkel)</option>
+                    <option value="v0.3-asym-eave">v0.3 (asym. lik gesimshøyde)</option>
                     <option value="v0.5">v0.5 (rooms-first, skråtak)</option>
                     <option value="v1">v1 (rom + vegger + trapp)</option>
                 </select>

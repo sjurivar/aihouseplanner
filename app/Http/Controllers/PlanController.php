@@ -13,7 +13,8 @@ class PlanController
     private const SAMPLES = [
         'v0' => 'plan.v0.single.json',
         'v0.3' => 'plan.v0.3.two_floors_roof.json',
-        'v0.3-asym' => 'plan.v0.3.asymmetric_roof.json',
+        'v0.3-asym-pitch' => 'plan.v0.3.asymmetric_roof.json',
+        'v0.3-asym-eave' => 'plan.v0.3.asymmetric_equal_eave.json',
         'v0.5' => 'plan.v0.5.rooms_first_sloped.json',
         'v1' => 'plan.v1.two_floors_rooms_walls_stairs.json',
     ];

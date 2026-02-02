@@ -40,6 +40,7 @@ Gable-tak (saltak) med to takflater:
   "pitch_degrees": 35,
   "overhang_mm": 500,
   "ridge_offset_mm": 0,
+  "ridge_mode": "equal_pitch",
   "ridge_direction": "x",
   "eave_height_mm": 2700,
   "material": "tiles"
@@ -52,15 +53,20 @@ Gable-tak (saltak) med to takflater:
 | pitch_degrees | ja | Helningsvinkel (22-45° typisk) |
 | overhang_mm | nei | Utstikk (default: 500) |
 | ridge_offset_mm | nei | Forskyving av mønet i mm: 0=midt, + mot sør/øst, - mot nord/vest |
+| ridge_mode | nei | `"equal_pitch"` (default) eller `"equal_eave"` |
 | ridge_direction | ja | `"x"` (møne øst-vest) eller `"y"` (møne nord-sør) |
 | eave_height_mm | nei | Gesimshøyde (topp vegg, default fra floors) |
 | material | nei | `"tiles"`, `"metal"`, `"shingles"` |
 
 **Møneposisjon:**
-- `ridge_direction = "x"`: møne parallelt med X-aksen, offset påvirker Y
+- `ridge_direction = "x"`: møne parallelt med X-aksen, offset påvirker Z
 - `ridge_direction = "y"`: møne parallelt med Z-aksen, offset påvirker X
 - `ridge_offset_mm = 0`: møne midt på bygget (symmetrisk)
 - `ridge_offset_mm = 1000`: møne 1m forskjøvet (asymmetrisk tak)
+
+**Ridge mode (ved asymmetrisk tak):**
+- `"equal_pitch"` (default): Begge takflater har samme pitch_degrees. Den ene veggen heves/senkes for at takflatene skal møtes.
+- `"equal_eave"`: Begge vegger på samme høyde. Takflatene får forskjellig pitch for å møtes i mønet.
 
 **3D-rendering:** To separate takflater (PlaneGeometry) med korrekte normaler.
 

@@ -27,5 +27,25 @@ export function validatePlan(plan) {
             }
         }
     }
+    // Roof validation
+    if (plan.roof && plan.roof.type === 'gable') {
+        const roof = plan.roof;
+        const ridgeDir = roof.ridge_direction ?? 'x';
+        const ridgeOffsetMm = roof.ridge_offset_mm ?? 0;
+        const overhang = roof.overhang_mm ?? 500;
+        // Find largest footprint for bounds checking
+        let maxWidth = 0, maxDepth = 0;
+        for (const r of roots) {
+            maxWidth = Math.max(maxWidth, r.footprint?.width ?? 0);
+            maxDepth = Math.max(maxDepth, r.footprint?.depth ?? 0);
+        }
+        const maxOffset = ridgeDir === 'x' ? (maxDepth / 2 - overhang) : (maxWidth / 2 - overhang);
+        if (Math.abs(ridgeOffsetMm) >= maxOffset) {
+            err.push(`Tak: ridge_offset_mm (${ridgeOffsetMm}) må være < ${Math.floor(maxOffset)}mm`);
+        }
+        if (roof.pitch_degrees && (roof.pitch_degrees < 5 || roof.pitch_degrees > 75)) {
+            err.push(`Tak: pitch_degrees (${roof.pitch_degrees}) bør være 5-75°`);
+        }
+    }
     return err;
 }

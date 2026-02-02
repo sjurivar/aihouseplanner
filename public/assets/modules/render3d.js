@@ -89,22 +89,97 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
     const scale = 0.001;
     const pitch = (roofSpec.pitch_degrees ?? 35) * Math.PI / 180;
     const overhang = (roofSpec.overhang_mm ?? 500) * scale;
-    const thick = (roofSpec.thickness_mm ?? 200) * scale;
+    const ridgeOffsetMm = roofSpec.ridge_offset_mm ?? 0;
     const ridgeDir = roofSpec.ridge_direction ?? 'x';
-    const w = width * scale + overhang * 2;
-    const d = depth * scale + overhang * 2;
-    const halfRidgeH = Math.tan(pitch) * (ridgeDir === 'x' ? d / 2 : w / 2);
-
+    
+    // Material - rødbrun takstein
     const mat = new THREE.MeshLambertMaterial({ color: 0x8b4513, side: THREE.DoubleSide });
-    const ridgeLen = ridgeDir === 'x' ? w : d;
-    const slopeLen = ridgeDir === 'x' ? d / 2 : w / 2;
-    const slopeW = Math.sqrt(slopeLen * slopeLen + halfRidgeH * halfRidgeH);
-    const geom = new THREE.BoxGeometry(ridgeDir === 'x' ? ridgeLen : slopeW * 2, thick, ridgeDir === 'x' ? slopeW * 2 : ridgeLen);
-    const mesh = new THREE.Mesh(geom, mat);
-    mesh.position.set(0, topElevation + halfRidgeH, 0);
-    mesh.rotation.x = ridgeDir === 'x' ? -pitch : 0;
-    mesh.rotation.z = ridgeDir === 'y' ? -pitch : 0;
-    meshes.push(mesh);
+    
+    // Dimensjoner i 3D-enheter (meter)
+    const w = width * scale;
+    const d = depth * scale;
+    const wWithOverhang = w + overhang * 2;
+    const dWithOverhang = d + overhang * 2;
+    
+    if (ridgeDir === 'x') {
+        // Møne går øst-vest (parallelt med X-aksen)
+        // Ridge offset påvirker Y-posisjon
+        const ridgeOffsetScaled = ridgeOffsetMm * scale;
+        const ridgeY = ridgeOffsetScaled; // relative to center
+        
+        // Avstand fra hver side til mønet
+        const distNorth = d / 2 - ridgeY; // nord side (negativ Z)
+        const distSouth = d / 2 + ridgeY; // sør side (positiv Z)
+        
+        // Ridge høyde
+        const ridgeHeightNorth = Math.tan(pitch) * distNorth;
+        const ridgeHeightSouth = Math.tan(pitch) * distSouth;
+        const ridgeHeight = Math.max(ridgeHeightNorth, ridgeHeightSouth);
+        
+        // Takflate nord (fra negativ Z til ridge)
+        const slopeLenNorth = Math.sqrt(distNorth * distNorth + ridgeHeightNorth * ridgeHeightNorth);
+        const distNorthWithOverhang = distNorth + overhang;
+        const slopeWithOverhangNorth = Math.sqrt(distNorthWithOverhang * distNorthWithOverhang + ridgeHeightNorth * ridgeHeightNorth);
+        const planeNorth = new THREE.PlaneGeometry(wWithOverhang, slopeWithOverhangNorth);
+        const meshNorth = new THREE.Mesh(planeNorth, mat.clone());
+        meshNorth.rotation.x = -pitch;
+        const centerYNorth = topElevation + ridgeHeightNorth / 2;
+        const centerZNorth = ridgeY - distNorthWithOverhang / 2 * Math.cos(pitch);
+        meshNorth.position.set(0, centerYNorth, centerZNorth);
+        meshes.push(meshNorth);
+        
+        // Takflate sør (fra ridge til positiv Z)
+        const slopeLenSouth = Math.sqrt(distSouth * distSouth + ridgeHeightSouth * ridgeHeightSouth);
+        const distSouthWithOverhang = distSouth + overhang;
+        const slopeWithOverhangSouth = Math.sqrt(distSouthWithOverhang * distSouthWithOverhang + ridgeHeightSouth * ridgeHeightSouth);
+        const planeSouth = new THREE.PlaneGeometry(wWithOverhang, slopeWithOverhangSouth);
+        const meshSouth = new THREE.Mesh(planeSouth, mat.clone());
+        meshSouth.rotation.x = pitch;
+        const centerYSouth = topElevation + ridgeHeightSouth / 2;
+        const centerZSouth = ridgeY + distSouthWithOverhang / 2 * Math.cos(pitch);
+        meshSouth.position.set(0, centerYSouth, centerZSouth);
+        meshes.push(meshSouth);
+        
+    } else {
+        // Møne går nord-sør (parallelt med Z-aksen)
+        // Ridge offset påvirker X-posisjon
+        const ridgeOffsetScaled = ridgeOffsetMm * scale;
+        const ridgeX = ridgeOffsetScaled; // relative to center
+        
+        // Avstand fra hver side til mønet
+        const distWest = w / 2 - ridgeX; // vest side (negativ X)
+        const distEast = w / 2 + ridgeX; // øst side (positiv X)
+        
+        // Ridge høyde
+        const ridgeHeightWest = Math.tan(pitch) * distWest;
+        const ridgeHeightEast = Math.tan(pitch) * distEast;
+        const ridgeHeight = Math.max(ridgeHeightWest, ridgeHeightEast);
+        
+        // Takflate vest (fra negativ X til ridge)
+        const slopeLenWest = Math.sqrt(distWest * distWest + ridgeHeightWest * ridgeHeightWest);
+        const distWestWithOverhang = distWest + overhang;
+        const slopeWithOverhangWest = Math.sqrt(distWestWithOverhang * distWestWithOverhang + ridgeHeightWest * ridgeHeightWest);
+        const planeWest = new THREE.PlaneGeometry(slopeWithOverhangWest, dWithOverhang);
+        const meshWest = new THREE.Mesh(planeWest, mat.clone());
+        meshWest.rotation.z = pitch;
+        const centerYWest = topElevation + ridgeHeightWest / 2;
+        const centerXWest = ridgeX - distWestWithOverhang / 2 * Math.cos(pitch);
+        meshWest.position.set(centerXWest, centerYWest, 0);
+        meshes.push(meshWest);
+        
+        // Takflate øst (fra ridge til positiv X)
+        const slopeLenEast = Math.sqrt(distEast * distEast + ridgeHeightEast * ridgeHeightEast);
+        const distEastWithOverhang = distEast + overhang;
+        const slopeWithOverhangEast = Math.sqrt(distEastWithOverhang * distEastWithOverhang + ridgeHeightEast * ridgeHeightEast);
+        const planeEast = new THREE.PlaneGeometry(slopeWithOverhangEast, dWithOverhang);
+        const meshEast = new THREE.Mesh(planeEast, mat.clone());
+        meshEast.rotation.z = -pitch;
+        const centerYEast = topElevation + ridgeHeightEast / 2;
+        const centerXEast = ridgeX + distEastWithOverhang / 2 * Math.cos(pitch);
+        meshEast.position.set(centerXEast, centerYEast, 0);
+        meshes.push(meshEast);
+    }
+    
     return meshes;
 }
 

@@ -1,0 +1,49 @@
+{
+  "units": "mm",
+  "defaults": {
+    "wall": {
+      "thickness": 200,
+      "height": 2700
+    }
+  },
+  "floors": [
+    {
+      "id": "f1",
+      "name": "1. etasje",
+      "level": 1,
+      "elevation_mm": 0,
+      "footprint": {
+        "type": "rect",
+        "width": 10000,
+        "depth": 8000
+      },
+      "openings": [
+        {
+          "id": "d1",
+          "wall": "front",
+          "type": "door",
+          "offset": 4000,
+          "width": 900,
+          "height": 2100
+        },
+        {
+          "id": "w1",
+          "wall": "front",
+          "type": "window",
+          "offset": 1000,
+          "width": 1500,
+          "height": 1200
+        }
+      ]
+    }
+  ],
+  "roof": {
+    "type": "gable",
+    "pitch_degrees": 30,
+    "overhang_mm": 600,
+    "ridge_offset_mm": 800,
+    "ridge_direction": "x",
+    "eave_height_mm": 2700,
+    "material": "tiles"
+  }
+}

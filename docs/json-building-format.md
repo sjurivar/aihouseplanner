@@ -29,7 +29,40 @@ v0.3 bruker footprint + defaults.wall + floors med openings:
 - `floors[]`: `id`, `name`, `level`, `elevation_mm`, `footprint`, `wall?`, `openings[]`
 - Vegger navngis: `front` | `right` | `back` | `left`
 - Åpninger: `offset`, `width`, `height` langs vegg
-- `roof`: gable, pitch, overhang, ridge_direction, etc.
+
+### Tak (roof)
+
+Gable-tak (saltak) med to takflater:
+
+```json
+"roof": {
+  "type": "gable",
+  "pitch_degrees": 35,
+  "overhang_mm": 500,
+  "ridge_offset_mm": 0,
+  "ridge_direction": "x",
+  "eave_height_mm": 2700,
+  "material": "tiles"
+}
+```
+
+| Felt | Obligatorisk | Beskrivelse |
+|------|--------------|-------------|
+| type | ja | `"gable"` (saltak med to flater) |
+| pitch_degrees | ja | Helningsvinkel (22-45° typisk) |
+| overhang_mm | nei | Utstikk (default: 500) |
+| ridge_offset_mm | nei | Forskyving av mønet i mm: 0=midt, + mot sør/øst, - mot nord/vest |
+| ridge_direction | ja | `"x"` (møne øst-vest) eller `"y"` (møne nord-sør) |
+| eave_height_mm | nei | Gesimshøyde (topp vegg, default fra floors) |
+| material | nei | `"tiles"`, `"metal"`, `"shingles"` |
+
+**Møneposisjon:**
+- `ridge_direction = "x"`: møne parallelt med X-aksen, offset påvirker Y
+- `ridge_direction = "y"`: møne parallelt med Z-aksen, offset påvirker X
+- `ridge_offset_mm = 0`: møne midt på bygget (symmetrisk)
+- `ridge_offset_mm = 1000`: møne 1m forskjøvet (asymmetrisk tak)
+
+**3D-rendering:** To separate takflater (PlaneGeometry) med korrekte normaler.
 
 Se `examples/plan.v0.3.two_floors_roof.json`.
 

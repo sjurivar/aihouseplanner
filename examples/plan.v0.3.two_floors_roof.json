@@ -83,8 +83,9 @@
     "type": "gable",
     "pitch_degrees": 35,
     "overhang_mm": 500,
-    "thickness_mm": 200,
+    "ridge_offset_mm": 0,
     "ridge_direction": "x",
-    "eave_height_mode": "top_walls"
+    "eave_height_mm": 2700,
+    "material": "tiles"
   }
 }

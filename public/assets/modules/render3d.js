@@ -117,24 +117,22 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const ridgeHeight = Math.max(ridgeHeightNorth, ridgeHeightSouth);
         
         // Takflate nord (fra negativ Z til ridge)
-        const slopeLenNorth = Math.sqrt(distNorth * distNorth + ridgeHeightNorth * ridgeHeightNorth);
         const distNorthWithOverhang = distNorth + overhang;
         const slopeWithOverhangNorth = Math.sqrt(distNorthWithOverhang * distNorthWithOverhang + ridgeHeightNorth * ridgeHeightNorth);
         const planeNorth = new THREE.PlaneGeometry(wWithOverhang, slopeWithOverhangNorth);
         const meshNorth = new THREE.Mesh(planeNorth, mat.clone());
-        meshNorth.rotation.x = -pitch;
+        meshNorth.rotation.x = Math.PI / 2 - pitch; // Roter fra vertikal til skråtak
         const centerYNorth = topElevation + ridgeHeightNorth / 2;
         const centerZNorth = ridgeY - distNorthWithOverhang / 2 * Math.cos(pitch);
         meshNorth.position.set(0, centerYNorth, centerZNorth);
         meshes.push(meshNorth);
         
         // Takflate sør (fra ridge til positiv Z)
-        const slopeLenSouth = Math.sqrt(distSouth * distSouth + ridgeHeightSouth * ridgeHeightSouth);
         const distSouthWithOverhang = distSouth + overhang;
         const slopeWithOverhangSouth = Math.sqrt(distSouthWithOverhang * distSouthWithOverhang + ridgeHeightSouth * ridgeHeightSouth);
         const planeSouth = new THREE.PlaneGeometry(wWithOverhang, slopeWithOverhangSouth);
         const meshSouth = new THREE.Mesh(planeSouth, mat.clone());
-        meshSouth.rotation.x = pitch;
+        meshSouth.rotation.x = -(Math.PI / 2 - pitch); // Roter motsatt vei
         const centerYSouth = topElevation + ridgeHeightSouth / 2;
         const centerZSouth = ridgeY + distSouthWithOverhang / 2 * Math.cos(pitch);
         meshSouth.position.set(0, centerYSouth, centerZSouth);
@@ -156,24 +154,22 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const ridgeHeight = Math.max(ridgeHeightWest, ridgeHeightEast);
         
         // Takflate vest (fra negativ X til ridge)
-        const slopeLenWest = Math.sqrt(distWest * distWest + ridgeHeightWest * ridgeHeightWest);
         const distWestWithOverhang = distWest + overhang;
         const slopeWithOverhangWest = Math.sqrt(distWestWithOverhang * distWestWithOverhang + ridgeHeightWest * ridgeHeightWest);
         const planeWest = new THREE.PlaneGeometry(slopeWithOverhangWest, dWithOverhang);
         const meshWest = new THREE.Mesh(planeWest, mat.clone());
-        meshWest.rotation.z = pitch;
+        meshWest.rotation.z = -(Math.PI / 2 - pitch);
         const centerYWest = topElevation + ridgeHeightWest / 2;
         const centerXWest = ridgeX - distWestWithOverhang / 2 * Math.cos(pitch);
         meshWest.position.set(centerXWest, centerYWest, 0);
         meshes.push(meshWest);
         
         // Takflate øst (fra ridge til positiv X)
-        const slopeLenEast = Math.sqrt(distEast * distEast + ridgeHeightEast * ridgeHeightEast);
         const distEastWithOverhang = distEast + overhang;
         const slopeWithOverhangEast = Math.sqrt(distEastWithOverhang * distEastWithOverhang + ridgeHeightEast * ridgeHeightEast);
         const planeEast = new THREE.PlaneGeometry(slopeWithOverhangEast, dWithOverhang);
         const meshEast = new THREE.Mesh(planeEast, mat.clone());
-        meshEast.rotation.z = -pitch;
+        meshEast.rotation.z = Math.PI / 2 - pitch;
         const centerYEast = topElevation + ridgeHeightEast / 2;
         const centerXEast = ridgeX + distEastWithOverhang / 2 * Math.cos(pitch);
         meshEast.position.set(centerXEast, centerYEast, 0);

@@ -29,6 +29,9 @@
                     <option value="v0.3">v0.3 (symmetrisk tak)</option>
                     <option value="v0.3-asym-pitch">v0.3 (asym. lik takvinkel)</option>
                     <option value="v0.3-asym-eave">v0.3 (asym. lik gesimshøyde)</option>
+                    <option value="v0.4-L">v0.4 L-hus (vinkelhus)</option>
+                    <option value="v0.4-T">v0.4 T-hus</option>
+                    <option value="v0.4-H">v0.4 H-hus</option>
                     <option value="v0.5">v0.5 (rooms-first, skråtak)</option>
                     <option value="v1">v1 (rom + vegger + trapp)</option>
                 </select>

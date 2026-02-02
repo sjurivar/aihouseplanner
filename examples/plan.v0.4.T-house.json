@@ -1,0 +1,66 @@
+{
+  "units": "mm",
+  "version": "0.4",
+  "defaults": {
+    "wall": {
+      "thickness": 200,
+      "height": 2700
+    }
+  },
+  "blocks": [
+    {
+      "id": "main",
+      "name": "Hovedfløy",
+      "position": { "x": 0, "z": 3000 },
+      "footprint": { "type": "rect", "width": 14000, "depth": 8000 },
+      "floors": [
+        {
+          "id": "f1",
+          "name": "1. etasje",
+          "level": 1,
+          "elevation_mm": 0,
+          "openings": [
+            { "id": "d1", "wall": "front", "type": "door", "offset": 6000, "width": 1000, "height": 2100 },
+            { "id": "w1", "wall": "front", "type": "window", "offset": 1500, "width": 1200, "height": 1200 },
+            { "id": "w2", "wall": "front", "type": "window", "offset": 10000, "width": 1200, "height": 1200 }
+          ]
+        }
+      ],
+      "roof": {
+        "type": "gable",
+        "pitch_degrees": 30,
+        "overhang_mm": 500,
+        "ridge_direction": "x",
+        "ridge_offset_mm": 0,
+        "ridge_mode": "equal_pitch"
+      }
+    },
+    {
+      "id": "wing_north",
+      "name": "Nordfløy (T-stykke)",
+      "position": { "x": 4000, "z": -6000 },
+      "footprint": { "type": "rect", "width": 6000, "depth": 9000 },
+      "floors": [
+        {
+          "id": "f1",
+          "name": "1. etasje",
+          "level": 1,
+          "elevation_mm": 0,
+          "openings": [
+            { "id": "w3", "wall": "front", "type": "window", "offset": 1500, "width": 1500, "height": 1400 },
+            { "id": "w4", "wall": "left", "type": "window", "offset": 3000, "width": 1200, "height": 1200 },
+            { "id": "w5", "wall": "right", "type": "window", "offset": 3000, "width": 1200, "height": 1200 }
+          ]
+        }
+      ],
+      "roof": {
+        "type": "gable",
+        "pitch_degrees": 30,
+        "overhang_mm": 500,
+        "ridge_direction": "y",
+        "ridge_offset_mm": 0,
+        "ridge_mode": "equal_pitch"
+      }
+    }
+  ]
+}

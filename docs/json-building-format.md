@@ -9,6 +9,7 @@ AI House Planner bruker et strukturert JSON-format for byggeplaner. Dette dokume
 | **v0** | Enkel etasje: units, footprint, wall, openings |
 | **v0.2** | Flere etasjer: units, defaults.wall, floors[] |
 | **v0.3** | Som v0.2 + roof (tak) |
+| **v0.4** | Vinkelhus: blocks[] med egne footprint, floors, roof, position |
 | **v0.5** | Rooms-first: levels, buildings[], footprints per level, rooms, stairs, voids, derived walls, skråtak per rom |
 | **v1** | Rom-basert: rooms, walls (path-basert), stairs; ulike vegghøyder per rom/vegg |
 
@@ -72,7 +73,78 @@ Gable-tak (saltak) med to takflater:
 
 Se `examples/plan.v0.3.two_floors_roof.json`.
 
-## 4. v0.5 (rooms-first, skråtak)
+## 4. v0.4 (vinkelhus - blocks)
+
+v0.4 støtter **vinkelhus** (L, T, H-form) med flere sammenkoblede blokker.
+
+### Top-level
+
+```json
+{
+  "units": "mm",
+  "version": "0.4",
+  "defaults": {
+    "wall": { "thickness": 200, "height": 2700 }
+  },
+  "blocks": [...]
+}
+```
+
+### Block-struktur
+
+Hver blokk er en selvstendig bygningsdel med egen posisjon, footprint, etasjer og tak:
+
+```json
+{
+  "id": "main",
+  "name": "Hovedfløy",
+  "position": { "x": 0, "z": 0 },
+  "footprint": { "type": "rect", "width": 10000, "depth": 8000 },
+  "floors": [
+    {
+      "id": "f1",
+      "name": "1. etasje",
+      "level": 1,
+      "elevation_mm": 0,
+      "openings": [...]
+    }
+  ],
+  "roof": {
+    "type": "gable",
+    "pitch_degrees": 35,
+    "ridge_direction": "x",
+    ...
+  }
+}
+```
+
+| Felt | Obligatorisk | Beskrivelse |
+|------|--------------|-------------|
+| id | ja | Unik blokk-ID |
+| name | nei | Visningsnavn |
+| position | ja | `{ x, z }` i mm fra origin (top-left) |
+| footprint | ja | `{ type: "rect", width, depth }` |
+| floors | ja | Array med etasjer (som v0.3) |
+| roof | nei | Tak for denne blokken |
+
+### Husformer
+
+| Form | Beskrivelse | Eksempel |
+|------|-------------|----------|
+| **L-hus** | Hovedblokk + 1 fløy | `plan.v0.4.L-house.json` |
+| **T-hus** | Hovedblokk + 1 sentrert fløy | `plan.v0.4.T-house.json` |
+| **H-hus** | Midtblokk + 2 fløyer | `plan.v0.4.H-house.json` |
+
+### Posisjonering
+
+- `position.x`: Horisontal posisjon (øst-vest)
+- `position.z`: Vertikal posisjon (nord-sør)
+- Koordinatsystem: Top-left origin (0,0), X øker mot høyre, Z øker nedover
+- Blokkene rendres med separate tak som "skjærer" inn i hverandre
+
+**Merk:** Valley-beregning (innvendige renner) er ikke implementert ennå.
+
+## 5. v0.5 (rooms-first, skråtak)
 
 v0.5 bruker **levels**, **buildings[]** med footprints per level, rooms, stairs, voids, derived walls og skråtak per rom.
 
@@ -110,7 +182,7 @@ v0.5 bruker **levels**, **buildings[]** med footprints per level, rooms, stairs,
 
 Se `examples/plan.v0.5.rooms_first_sloped.json`.
 
-## 5. v1 (rom-basert)
+## 6. v1 (rom-basert)
 
 v1 legger til rom som byggekloss, vegger definert per rom, trapper, og ulike vegghøyder.
 
@@ -260,7 +332,7 @@ v1 legger til rom som byggekloss, vegger definert per rom, trapper, og ulike veg
 
 Begge kan brukes; rooms/walls/stairs er optional.
 
-## 6. Valideringsregler
+## 7. Valideringsregler
 
 ### Felles
 
@@ -283,7 +355,7 @@ Begge kan brukes; rooms/walls/stairs er optional.
 11. `stairs.type`: straight | l | u
 12. `stairs.from_floor_id` og `to_floor_id` må referere til gyldige floors
 
-## 7. Eksempel-JSON
+## 8. Eksempel-JSON
 
 | Fil | Beskrivelse |
 |-----|-------------|

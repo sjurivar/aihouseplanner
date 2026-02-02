@@ -1,0 +1,89 @@
+{
+  "units": "mm",
+  "version": "0.4",
+  "defaults": {
+    "wall": {
+      "thickness": 200,
+      "height": 2700
+    }
+  },
+  "blocks": [
+    {
+      "id": "main",
+      "name": "Midtfløy (bindeledd)",
+      "position": { "x": 5000, "z": 0 },
+      "footprint": { "type": "rect", "width": 4000, "depth": 10000 },
+      "floors": [
+        {
+          "id": "f1",
+          "name": "1. etasje",
+          "level": 1,
+          "elevation_mm": 0,
+          "openings": [
+            { "id": "d1", "wall": "front", "type": "door", "offset": 1200, "width": 1000, "height": 2100 }
+          ]
+        }
+      ],
+      "roof": {
+        "type": "gable",
+        "pitch_degrees": 25,
+        "overhang_mm": 400,
+        "ridge_direction": "y",
+        "ridge_offset_mm": 0,
+        "ridge_mode": "equal_pitch"
+      }
+    },
+    {
+      "id": "wing_west",
+      "name": "Vestfløy",
+      "position": { "x": 0, "z": -2000 },
+      "footprint": { "type": "rect", "width": 5000, "depth": 8000 },
+      "floors": [
+        {
+          "id": "f1",
+          "name": "1. etasje",
+          "level": 1,
+          "elevation_mm": 0,
+          "openings": [
+            { "id": "w1", "wall": "front", "type": "window", "offset": 1500, "width": 1200, "height": 1200 },
+            { "id": "w2", "wall": "left", "type": "window", "offset": 3000, "width": 1200, "height": 1200 }
+          ]
+        }
+      ],
+      "roof": {
+        "type": "gable",
+        "pitch_degrees": 35,
+        "overhang_mm": 500,
+        "ridge_direction": "x",
+        "ridge_offset_mm": 0,
+        "ridge_mode": "equal_pitch"
+      }
+    },
+    {
+      "id": "wing_east",
+      "name": "Østfløy",
+      "position": { "x": 9000, "z": -2000 },
+      "footprint": { "type": "rect", "width": 5000, "depth": 8000 },
+      "floors": [
+        {
+          "id": "f1",
+          "name": "1. etasje",
+          "level": 1,
+          "elevation_mm": 0,
+          "openings": [
+            { "id": "w3", "wall": "front", "type": "window", "offset": 1500, "width": 1200, "height": 1200 },
+            { "id": "w4", "wall": "right", "type": "window", "offset": 3000, "width": 1200, "height": 1200 }
+          ]
+        }
+      ],
+      "roof": {
+        "type": "gable",
+        "pitch_degrees": 35,
+        "overhang_mm": 500,
+        "ridge_direction": "x",
+        "ridge_offset_mm": 0,
+        "ridge_mode": "equal_pitch"
+      }
+    }
+  ]
+}

@@ -379,8 +379,93 @@ function render2Dv0(svgEl, activeRoot, plan, floorIndex, scale = 0.05, pad = 40)
     svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${dims.join('')}${paths.join('')}</svg>`;
 }
 
+/** v0.4: Multi-block rendering (L, T, H houses) */
+function render2Dv04(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad = 40) {
+    const blocks = activeRoot.blocks ?? [];
+    if (!blocks.length) return;
+
+    // Find bounding box of all blocks
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const block of blocks) {
+        const pos = block.position ?? { x: 0, z: 0 };
+        const fp = block.footprint ?? {};
+        const bw = fp.width ?? 8000;
+        const bd = fp.depth ?? 8000;
+        minX = Math.min(minX, pos.x);
+        minY = Math.min(minY, pos.z);
+        maxX = Math.max(maxX, pos.x + bw);
+        maxY = Math.max(maxY, pos.z + bd);
+    }
+    const totalW = maxX - minX;
+    const totalD = maxY - minY;
+    const vw = totalW * scale + pad * 2;
+    const vh = totalD * scale + pad * 2;
+
+    const parts = [];
+
+    // Render each block
+    for (let bi = 0; bi < blocks.length; bi++) {
+        const block = blocks[bi];
+        const pos = block.position ?? { x: 0, z: 0 };
+        const fp = block.footprint ?? {};
+        const bw = fp.width ?? 8000;
+        const bd = fp.depth ?? 8000;
+        const tw = block.wall?.thickness ?? 200;
+
+        const bx = pad + (pos.x - minX) * scale;
+        const by = pad + (pos.z - minY) * scale;
+        const sw = bw * scale;
+        const sd = bd * scale;
+        const twScaled = tw * scale;
+
+        const blockPath = `blocks.${bi}`;
+
+        // Floor fill
+        parts.push(`<rect class="svg-highlightable" data-highlight="${blockPath}" x="${bx}" y="${by}" width="${sw}" height="${sd}" fill="#f5f5dc" stroke="none"/>`);
+
+        // Walls as thick band (exterior)
+        const outerPath = `M ${bx} ${by} h ${sw} v ${sd} h -${sw} Z`;
+        const innerPath = `M ${bx + twScaled} ${by + twScaled} v ${sd - 2 * twScaled} h ${sw - 2 * twScaled} v -${sd - 2 * twScaled} Z`;
+        parts.push(`<path d="${outerPath} ${innerPath}" fill="#666" fill-rule="evenodd" stroke="none"/>`);
+
+        // Openings
+        for (const o of block.openings ?? []) {
+            const ox = Number(o.offset) ?? 0;
+            const ow = Number(o.width) ?? 900;
+            let rect;
+            if (o.wall === 'front') rect = { x: bx + ox * scale, y: by, w: ow * scale, h: twScaled };
+            else if (o.wall === 'back') rect = { x: bx + ox * scale, y: by + sd - twScaled, w: ow * scale, h: twScaled };
+            else if (o.wall === 'left') rect = { x: bx, y: by + ox * scale, w: twScaled, h: ow * scale };
+            else rect = { x: bx + sw - twScaled, y: by + ox * scale, w: twScaled, h: ow * scale };
+            parts.push(`<rect x="${rect.x}" y="${rect.y}" width="${rect.w}" height="${rect.h}" fill="white" stroke="#999"/>`);
+        }
+
+        // Block label
+        const cx = bx + sw / 2;
+        const cy = by + sd / 2;
+        parts.push(`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#333">${block.blockName ?? block.blockId}</text>`);
+    }
+
+    // Dimensions
+    const dims = [
+        `<line x1="${pad}" y1="${pad - 15}" x2="${pad + totalW * scale}" y2="${pad - 15}" stroke="#666"/>`,
+        `<text x="${pad + totalW * scale / 2}" y="${pad - 5}" text-anchor="middle" font-size="10" fill="#666">${totalW}mm</text>`,
+        `<line x1="${pad - 15}" y1="${pad}" x2="${pad - 15}" y2="${pad + totalD * scale}" stroke="#666"/>`,
+        `<text x="${pad - 8}" y="${pad + totalD * scale / 2}" text-anchor="middle" font-size="10" fill="#666" transform="rotate(-90 ${pad - 8} ${pad + totalD * scale / 2})">${totalD}mm</text>`,
+    ];
+
+    svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${SVG_DEFS}${dims.join('')}${parts.join('')}</svg>`;
+}
+
 export function render2D(svgEl, activeRoot, plan, floorIndex = 0) {
     if (!activeRoot) return;
+    
+    // v0.4 blocks
+    if (activeRoot.isBlocks && activeRoot.blocks?.length) {
+        render2Dv04(svgEl, activeRoot, plan, floorIndex);
+        return;
+    }
+    
     const hasV05 = isV05(plan) && (activeRoot.rooms?.length ?? 0) > 0;
     const hasV1 = isV1(plan) && (activeRoot.rooms?.length ?? 0) > 0;
     const hasFootprint = activeRoot.footprint && (activeRoot.footprint.width || activeRoot.footprint.polygon);

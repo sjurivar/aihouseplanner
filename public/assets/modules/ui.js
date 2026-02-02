@@ -161,7 +161,7 @@ export function setupEventHandlers() {
         const v = e.target.value;
         if (v) {
             await loadSample(v);
-            e.target.value = '';
+            // Behold valgt verdi synlig i dropdown
         }
     });
 

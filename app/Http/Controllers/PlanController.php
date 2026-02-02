@@ -15,6 +15,9 @@ class PlanController
         'v0.3' => 'plan.v0.3.two_floors_roof.json',
         'v0.3-asym-pitch' => 'plan.v0.3.asymmetric_roof.json',
         'v0.3-asym-eave' => 'plan.v0.3.asymmetric_equal_eave.json',
+        'v0.4-L' => 'plan.v0.4.L-house.json',
+        'v0.4-T' => 'plan.v0.4.T-house.json',
+        'v0.4-H' => 'plan.v0.4.H-house.json',
         'v0.5' => 'plan.v0.5.rooms_first_sloped.json',
         'v1' => 'plan.v1.two_floors_rooms_walls_stairs.json',
     ];

@@ -249,7 +249,8 @@ export function rebuild3D(allFloors, roofSpec, plan) {
     clearScene();
     if (!allFloors?.length) return;
     // v0.5/v1: 3D not implemented for polygon footprint / rooms-only
-    if ((isV05(plan) || (isV1(plan) && !allFloors[0]?.footprint?.width))) {
+    const hasBlocks = allFloors[0]?.isBlock === true;
+    if (!hasBlocks && (isV05(plan) || (isV1(plan) && !allFloors[0]?.footprint?.width))) {
         const msg = document.createElement('div');
         msg.textContent = '3D not implemented for v0.5/v1 yet';
         msg.style.cssText = 'color:#999;padding:2rem;text-align:center;';
@@ -274,8 +275,24 @@ export function rebuild3D(allFloors, roofSpec, plan) {
     const scale = 0.001;
     const matWall = new THREE.MeshLambertMaterial({ color: 0xcccccc });
     const matFloor = new THREE.MeshLambertMaterial({ color: 0xdddddd });
-    let topY = 0;
-    let lastW = 8000, lastD = 8000;
+    
+    // For multi-block: find center offset to center the entire building
+    let centerOffsetX = 0, centerOffsetZ = 0;
+    if (hasBlocks) {
+        let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+        for (const root of allFloors) {
+            const pos = root.position ?? { x: 0, z: 0 };
+            const fp = root.footprint ?? {};
+            const bw = fp.width ?? 8000;
+            const bd = fp.depth ?? 8000;
+            minX = Math.min(minX, pos.x);
+            maxX = Math.max(maxX, pos.x + bw);
+            minZ = Math.min(minZ, pos.z);
+            maxZ = Math.max(maxZ, pos.z + bd);
+        }
+        centerOffsetX = (minX + maxX) / 2 * scale;
+        centerOffsetZ = (minZ + maxZ) / 2 * scale;
+    }
 
     const meshByPath = {};
     let fi = 0;
@@ -286,14 +303,17 @@ export function rebuild3D(allFloors, roofSpec, plan) {
         const tw = (root.wall?.thickness ?? 200) * scale;
         const th = (root.wall?.height ?? 2700) * scale;
         const elev = (root.elevation_mm ?? 0) * scale;
-        topY = elev + th;
-        lastW = (fp?.width ?? 8000);
-        lastD = (fp?.depth ?? 8000);
-        const path = `floors.${fi}`;
+        
+        // Block position offset
+        const pos = root.position ?? { x: 0, z: 0 };
+        const blockOffsetX = hasBlocks ? (pos.x * scale + w / 2 - centerOffsetX) : 0;
+        const blockOffsetZ = hasBlocks ? (pos.z * scale + d / 2 - centerOffsetZ) : 0;
+        
+        const path = hasBlocks ? `blocks.${root.blockId}` : `floors.${fi}`;
 
         const floorMesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), matFloor.clone());
         floorMesh.rotation.x = -Math.PI / 2;
-        floorMesh.position.set(0, elev, 0);
+        floorMesh.position.set(blockOffsetX, elev, blockOffsetZ);
         scene3d.add(floorMesh);
         if (!meshByPath[path]) meshByPath[path] = [];
         meshByPath[path].push(floorMesh);
@@ -306,15 +326,15 @@ export function rebuild3D(allFloors, roofSpec, plan) {
             const len = wallsLen[wallNames[i]];
             const openings = (root.openings ?? []).filter(o => o.wall === wallNames[i]);
             openings.sort((a, b) => (a.offset ?? 0) - (b.offset ?? 0));
-            let pos = 0;
+            let wallPos = 0;
             const segs = [];
             for (const o of openings) {
                 const oo = (o.offset ?? 0) * scale;
                 const ow = (o.width ?? 900) * scale;
-                if (oo > pos) segs.push({ start: pos, end: oo });
-                pos = oo + ow;
+                if (oo > wallPos) segs.push({ start: wallPos, end: oo });
+                wallPos = oo + ow;
             }
-            if (pos < len) segs.push({ start: pos, end: len });
+            if (wallPos < len) segs.push({ start: wallPos, end: len });
 
             const isX = wallNames[i] === 'front' || wallNames[i] === 'back';
             const [pw, ph, pd] = wallSize[i];
@@ -325,21 +345,38 @@ export function rebuild3D(allFloors, roofSpec, plan) {
                 const geom = new THREE.BoxGeometry(segW, ph, segD);
                 const mesh = new THREE.Mesh(geom, matWall.clone());
                 const cx = (seg.start + seg.end) / 2;
-                if (wallNames[i] === 'front') mesh.position.set(-w / 2 + cx, elev + th / 2, -d / 2 + tw / 2);
-                else if (wallNames[i] === 'back') mesh.position.set(-w / 2 + cx, elev + th / 2, d / 2 - tw / 2);
-                else if (wallNames[i] === 'left') mesh.position.set(-w / 2 + tw / 2, elev + th / 2, -d / 2 + cx);
-                else mesh.position.set(w / 2 - tw / 2, elev + th / 2, -d / 2 + cx);
+                if (wallNames[i] === 'front') mesh.position.set(blockOffsetX - w / 2 + cx, elev + th / 2, blockOffsetZ - d / 2 + tw / 2);
+                else if (wallNames[i] === 'back') mesh.position.set(blockOffsetX - w / 2 + cx, elev + th / 2, blockOffsetZ + d / 2 - tw / 2);
+                else if (wallNames[i] === 'left') mesh.position.set(blockOffsetX - w / 2 + tw / 2, elev + th / 2, blockOffsetZ - d / 2 + cx);
+                else mesh.position.set(blockOffsetX + w / 2 - tw / 2, elev + th / 2, blockOffsetZ - d / 2 + cx);
                 scene3d.add(mesh);
                 if (!meshByPath[path]) meshByPath[path] = [];
                 meshByPath[path].push(mesh);
             }
         }
+
+        // For blocks: each block has its own roof
+        if (hasBlocks && root.roof) {
+            const topY = elev + th;
+            const roofMeshes = buildRoofMeshes(root.roof, topY, fp?.width ?? 8000, fp?.depth ?? 8000);
+            for (const m of roofMeshes) {
+                m.position.x += blockOffsetX;
+                m.position.z += blockOffsetZ;
+                scene3d.add(m);
+            }
+        }
+        
         fi++;
     }
 
     scene3d.userData.meshesByPath = meshByPath;
 
-    if (roofSpec) {
+    // Global roof for non-block plans
+    if (!hasBlocks && roofSpec && allFloors.length > 0) {
+        const lastRoot = allFloors[allFloors.length - 1];
+        const topY = (lastRoot.elevation_mm ?? 0) * scale + (lastRoot.wall?.height ?? 2700) * scale;
+        const lastW = lastRoot.footprint?.width ?? 8000;
+        const lastD = lastRoot.footprint?.depth ?? 8000;
         buildRoofMeshes(roofSpec, topY, lastW, lastD).forEach(m => scene3d.add(m));
     }
 

@@ -3,7 +3,7 @@
  */
 
 import * as THREE from 'three';
-import { OrbitControls } from '../vendor/OrbitControls.js';
+import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { scene3d, renderer3d, camera3d, controls3d, set3DContext } from './state.js';
 import { isV05, isV1 } from './parse.js';
 

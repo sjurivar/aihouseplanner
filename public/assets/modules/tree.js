@@ -2,7 +2,7 @@
  * JSON tree hierarchy view with editing
  */
 
-import { isV05 } from './parse.js';
+import { isV05, isV04 } from './parse.js';
 import { scene3d } from './state.js';
 
 function escapeHtml(s) {
@@ -11,6 +11,41 @@ function escapeHtml(s) {
 
 export function buildPlanHierarchy(plan) {
     if (!plan || typeof plan !== 'object') return null;
+    
+    // v0.4 blocks format
+    if (isV04(plan) && plan.blocks?.length) {
+        const root = { label: 'Plan (vinkelhus)', children: [], data: plan, path: [] };
+        for (let bi = 0; bi < plan.blocks.length; bi++) {
+            const block = plan.blocks[bi];
+            const blockLabel = block.name ?? block.id ?? `Blokk ${bi + 1}`;
+            const blockNode = { label: blockLabel, children: [], data: block, path: ['blocks', bi] };
+            
+            // Floors in this block
+            for (let fi = 0; fi < (block.floors ?? []).length; fi++) {
+                const f = block.floors[fi];
+                const floorLabel = f.name ?? f.id ?? 'Etasje';
+                const floorNode = { label: floorLabel, children: [], data: f, path: ['blocks', bi, 'floors', fi] };
+                
+                // Openings
+                for (let oi = 0; oi < (f.openings ?? []).length; oi++) {
+                    const o = f.openings[oi];
+                    const oLabel = `${o.type === 'door' ? 'Dør' : 'Vindu'} (${o.wall})`;
+                    floorNode.children.push({ label: oLabel, children: [], data: o, path: ['blocks', bi, 'floors', fi, 'openings', oi] });
+                }
+                blockNode.children.push(floorNode);
+            }
+            
+            // Roof for this block
+            if (block.roof) {
+                const roofLabel = `Tak (${block.roof.type ?? 'gable'})`;
+                blockNode.children.push({ label: roofLabel, children: [], data: block.roof, path: ['blocks', bi, 'roof'] });
+            }
+            
+            root.children.push(blockNode);
+        }
+        return root;
+    }
+    
     if (isV05(plan) && plan.buildings?.length) {
         const b = plan.buildings[0];
         const rootLabel = b.name ?? 'Plan';

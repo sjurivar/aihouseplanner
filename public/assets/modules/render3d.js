@@ -83,58 +83,52 @@ function addGroundAndHorizon() {
     scene3d.add(horizonLine);
 }
 
-function buildRoofMeshes(roofSpec, topElevation, width, depth) {
+/**
+ * Build gable roof meshes. All geometry is computed in local coordinates (block center at 0,0).
+ * Optional centerOffsetX/Z: when provided (e.g. for multi-block), meshes are shifted so they
+ * sit correctly in world space at (centerOffsetX, y, centerOffsetZ).
+ */
+function buildRoofMeshes(roofSpec, topElevation, width, depth, centerOffsetX = 0, centerOffsetZ = 0) {
     const meshes = [];
     if (!roofSpec || roofSpec.type !== 'gable') return meshes;
     const scale = 0.001;
     const pitch = (roofSpec.pitch_degrees ?? 35) * Math.PI / 180;
     const overhang = (roofSpec.overhang_mm ?? 500) * scale;
     const ridgeOffsetMm = roofSpec.ridge_offset_mm ?? 0;
-    const ridgeMode = roofSpec.ridge_mode ?? 'equal_pitch'; // 'equal_pitch' eller 'equal_eave'
+    const ridgeMode = roofSpec.ridge_mode ?? 'equal_pitch';
     const ridgeDir = roofSpec.ridge_direction ?? 'x';
     
-    // Material - rødbrun takstein
     const mat = new THREE.MeshLambertMaterial({ color: 0x8b4513, side: THREE.DoubleSide });
     
-    // Dimensjoner i 3D-enheter (meter)
     const w = width * scale;
     const d = depth * scale;
     const wWithOverhang = w + overhang * 2;
     const dWithOverhang = d + overhang * 2;
     
+    const ox = centerOffsetX;
+    const oz = centerOffsetZ;
+    
     if (ridgeDir === 'x') {
-        // Møne går øst-vest (parallelt med X-aksen)
-        // Ridge offset påvirker Z-posisjon (positiv = mot sør/+Z)
         const ridgeOffsetScaled = ridgeOffsetMm * scale;
-        const ridgeZ = ridgeOffsetScaled; // relative to center
-        
-        // Avstand fra hver side til mønet (horisontal)
-        const distNorth = d / 2 + ridgeZ; // nord side (negativ Z) - økt hvis ridge mot sør
-        const distSouth = d / 2 - ridgeZ; // sør side (positiv Z) - redusert hvis ridge mot sør
+        const ridgeZ = ridgeOffsetScaled;
+        const distNorth = d / 2 + ridgeZ;
+        const distSouth = d / 2 - ridgeZ;
         
         let ridgeHeight, eaveElevNorth, eaveElevSouth, pitchNorth, pitchSouth;
-        
         if (ridgeMode === 'equal_pitch') {
-            // Begge takflater har samme pitch - gesimshøyde justeres
             pitchNorth = pitch;
             pitchSouth = pitch;
-            // Mønet skal være på topp av lengste siden
             const maxDist = Math.max(distNorth, distSouth);
             ridgeHeight = Math.tan(pitch) * maxDist;
-            // Mønet har absolutt høyde: topElevation + ridgeHeight
-            // Beregn gesimshøyde for hver side slik at de når samme punkt
             const ridgeAbsoluteY = topElevation + ridgeHeight;
             eaveElevNorth = ridgeAbsoluteY - Math.tan(pitch) * distNorth;
             eaveElevSouth = ridgeAbsoluteY - Math.tan(pitch) * distSouth;
         } else {
-            // equal_eave: Samme gesimshøyde - pitch justeres
             eaveElevNorth = topElevation;
             eaveElevSouth = topElevation;
-            // Finn ridgeHeight fra lengste side
             const ridgeHeightNorth = Math.tan(pitch) * distNorth;
             const ridgeHeightSouth = Math.tan(pitch) * distSouth;
             ridgeHeight = Math.max(ridgeHeightNorth, ridgeHeightSouth);
-            // Beregn faktisk pitch for hver side
             pitchNorth = Math.atan(ridgeHeight / distNorth);
             pitchSouth = Math.atan(ridgeHeight / distSouth);
         }
@@ -142,8 +136,7 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const overhangSlopeLenNorth = overhang / Math.cos(pitchNorth);
         const overhangSlopeLenSouth = overhang / Math.cos(pitchSouth);
         
-        // Takflate nord (fra negativ Z til ridge)
-        const riseNorth = Math.tan(pitchNorth) * distNorth; // vertikal stigning for nord-siden
+        const riseNorth = Math.tan(pitchNorth) * distNorth;
         const slopeLenNorth = Math.sqrt(distNorth * distNorth + riseNorth * riseNorth);
         const totalSlopeLenNorth = slopeLenNorth + overhangSlopeLenNorth;
         const planeNorth = new THREE.PlaneGeometry(wWithOverhang, totalSlopeLenNorth);
@@ -155,11 +148,10 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const yEaveNorthWithOverhang = eaveElevNorth - overhang * Math.tan(pitchNorth);
         const yRidgeNorth = eaveElevNorth + riseNorth;
         const centerYNorth = (yRidgeNorth + yEaveNorthWithOverhang) / 2;
-        meshNorth.position.set(0, centerYNorth, centerZNorth);
+        meshNorth.position.set(ox, centerYNorth, oz + centerZNorth);
         meshes.push(meshNorth);
         
-        // Takflate sør (fra ridge til positiv Z)
-        const riseSouth = Math.tan(pitchSouth) * distSouth; // vertikal stigning for sør-siden
+        const riseSouth = Math.tan(pitchSouth) * distSouth;
         const slopeLenSouth = Math.sqrt(distSouth * distSouth + riseSouth * riseSouth);
         const totalSlopeLenSouth = slopeLenSouth + overhangSlopeLenSouth;
         const planeSouth = new THREE.PlaneGeometry(wWithOverhang, totalSlopeLenSouth);
@@ -171,23 +163,17 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const yEaveSouthWithOverhang = eaveElevSouth - overhang * Math.tan(pitchSouth);
         const yRidgeSouth = eaveElevSouth + riseSouth;
         const centerYSouth = (yRidgeSouth + yEaveSouthWithOverhang) / 2;
-        meshSouth.position.set(0, centerYSouth, centerZSouth);
+        meshSouth.position.set(ox, centerYSouth, oz + centerZSouth);
         meshes.push(meshSouth);
         
     } else {
-        // Møne går nord-sør (parallelt med Z-aksen)
-        // Ridge offset påvirker X-posisjon (positiv = mot øst/+X)
         const ridgeOffsetScaled = ridgeOffsetMm * scale;
-        const ridgeX = ridgeOffsetScaled; // relative to center
-        
-        // Avstand fra hver side til mønet (horisontal)
-        const distWest = w / 2 + ridgeX; // vest side (negativ X) - økt hvis ridge mot øst
-        const distEast = w / 2 - ridgeX; // øst side (positiv X) - redusert hvis ridge mot øst
+        const ridgeX = ridgeOffsetScaled;
+        const distWest = w / 2 + ridgeX;
+        const distEast = w / 2 - ridgeX;
         
         let ridgeHeight, eaveElevWest, eaveElevEast, pitchWest, pitchEast;
-        
         if (ridgeMode === 'equal_pitch') {
-            // Begge takflater har samme pitch - gesimshøyde justeres
             pitchWest = pitch;
             pitchEast = pitch;
             const maxDist = Math.max(distWest, distEast);
@@ -196,7 +182,6 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
             eaveElevWest = ridgeAbsoluteY - Math.tan(pitch) * distWest;
             eaveElevEast = ridgeAbsoluteY - Math.tan(pitch) * distEast;
         } else {
-            // equal_eave: Samme gesimshøyde - pitch justeres
             eaveElevWest = topElevation;
             eaveElevEast = topElevation;
             const ridgeHeightWest = Math.tan(pitch) * distWest;
@@ -209,7 +194,6 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const overhangSlopeLenWest = overhang / Math.cos(pitchWest);
         const overhangSlopeLenEast = overhang / Math.cos(pitchEast);
         
-        // Takflate vest (fra negativ X til ridge)
         const riseWest = Math.tan(pitchWest) * distWest;
         const slopeLenWest = Math.sqrt(distWest * distWest + riseWest * riseWest);
         const totalSlopeLenWest = slopeLenWest + overhangSlopeLenWest;
@@ -222,10 +206,9 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const yEaveWestWithOverhang = eaveElevWest - overhang * Math.tan(pitchWest);
         const yRidgeWest = eaveElevWest + riseWest;
         const centerYWest = (yRidgeWest + yEaveWestWithOverhang) / 2;
-        meshWest.position.set(centerXWest, centerYWest, 0);
+        meshWest.position.set(ox + centerXWest, centerYWest, oz);
         meshes.push(meshWest);
         
-        // Takflate øst (fra ridge til positiv X)
         const riseEast = Math.tan(pitchEast) * distEast;
         const slopeLenEast = Math.sqrt(distEast * distEast + riseEast * riseEast);
         const totalSlopeLenEast = slopeLenEast + overhangSlopeLenEast;
@@ -238,7 +221,7 @@ function buildRoofMeshes(roofSpec, topElevation, width, depth) {
         const yEaveEastWithOverhang = eaveElevEast - overhang * Math.tan(pitchEast);
         const yRidgeEast = eaveElevEast + riseEast;
         const centerYEast = (yRidgeEast + yEaveEastWithOverhang) / 2;
-        meshEast.position.set(centerXEast, centerYEast, 0);
+        meshEast.position.set(ox + centerXEast, centerYEast, oz);
         meshes.push(meshEast);
     }
     
@@ -355,15 +338,11 @@ export function rebuild3D(allFloors, roofSpec, plan) {
             }
         }
 
-        // For blocks: each block has its own roof
+        // For blocks: each block has its own roof – møne/raft beregnes, tak tegnes i forhold til blokkens senter
         if (hasBlocks && root.roof) {
             const topY = elev + th;
-            const roofMeshes = buildRoofMeshes(root.roof, topY, fp?.width ?? 8000, fp?.depth ?? 8000);
-            for (const m of roofMeshes) {
-                m.position.x += blockOffsetX;
-                m.position.z += blockOffsetZ;
-                scene3d.add(m);
-            }
+            const roofMeshes = buildRoofMeshes(root.roof, topY, fp?.width ?? 8000, fp?.depth ?? 8000, blockOffsetX, blockOffsetZ);
+            for (const m of roofMeshes) scene3d.add(m);
         }
         
         fi++;

@@ -2,7 +2,44 @@
 
 AI House Planner bruker et strukturert JSON-format for byggeplaner. Dette dokumentet beskriver alle versjoner, felter, regler og koordinatsystemet.
 
-## 1. Oversikt over versjoner
+## 1. Kanonisk format 1.x (anbefalt)
+
+**1.x er den foretrukne, samlede formatversjonen.** Appen støtter både enkeltbygning og vinkelhus (flere blokker) i samme format.
+
+- **version:** `"1.0"` (eller annen `1.x`)
+- **units:** `"mm"`
+- **Enkeltbygning:** bruk `floors[]` og valgfritt `roof` på toppnivå (som tidligere v1).
+- **Vinkelhus (flere blokker):** bruk `blocks[]`; hver blokk har `position`, `footprint`, `floors[]` og valgfritt `roof`. Ingen `floors` på toppnivå.
+
+Eksempel enkeltbygning (1.x):
+
+```json
+{
+  "version": "1.0",
+  "units": "mm",
+  "building": { "name": "..." },
+  "defaults": { "wall": { "thickness_mm": 200, "height_mm": 2700 } },
+  "floors": [ { "id": "F1", "footprint": {...}, "rooms": [...], "walls": [...], "stairs": [...] } ],
+  "roof": { "type": "gable", ... }
+}
+```
+
+Eksempel vinkelhus (1.x med blocks):
+
+```json
+{
+  "version": "1.0",
+  "units": "mm",
+  "defaults": { "wall": { "thickness_mm": 200, "height_mm": 2700 } },
+  "blocks": [
+    { "id": "main", "position": { "x": 0, "z": 0 }, "footprint": {...}, "floors": [...], "roof": {...} }
+  ]
+}
+```
+
+**Normalisering:** Ved lasting (fil, sample eller API) konverteres eldre planer (v0, v0.2, v0.3, v0.4) til 1.x i minnet. Versjon settes til `"1.0"`, og `defaults.wall` får feltene `thickness_mm` og `height_mm`. Struktur (floors vs blocks) beholdes. v0.5 og fremtidige utvidelser (rom-specifikt tak, voids, derived walls) kan legges til i 1.x senere.
+
+## 2. Oversikt over versjoner (legacy og 1.x)
 
 | Versjon | Beskrivelse |
 |---------|-------------|
@@ -10,10 +47,10 @@ AI House Planner bruker et strukturert JSON-format for byggeplaner. Dette dokume
 | **v0.2** | Flere etasjer: units, defaults.wall, floors[] |
 | **v0.3** | Som v0.2 + roof (tak) |
 | **v0.4** | Vinkelhus: blocks[] med egne footprint, floors, roof, position |
-| **v0.5** | Rooms-first: levels, buildings[], footprints per level, rooms, stairs, voids, derived walls, skråtak per rom |
-| **v1** | Rom-basert: rooms, walls (path-basert), stairs; ulike vegghøyder per rom/vegg |
+| **v0.5** | Rooms-first: levels, buildings[], footprints per level, rooms, stairs, voids, derived walls, skråtak per rom (fremtidig utvidelse av 1.x) |
+| **v1 / 1.x** | Kanonisk: enten `floors[]` (enkeltbygning) eller `blocks[]` (vinkelhus); rom, vegger, trapper som i v1 |
 
-## 2. Felles begreper
+## 3. Felles begreper
 
 ### Enheter og koordinatsystem
 
@@ -21,7 +58,7 @@ AI House Planner bruker et strukturert JSON-format for byggeplaner. Dette dokume
 - **2D per floor:** Top-down i mm, origin `(0,0)` i footprint top-left (SVG-konvensjon: X høyre, Y nedover)
 - **3D:** X = bredde, Z = dybde, Y = opp; konverter med sentrering rundt footprint
 
-## 3. v0.3 (recap)
+## 4. v0.3 (recap)
 
 v0.3 bruker footprint + defaults.wall + floors med openings:
 
@@ -73,7 +110,7 @@ Gable-tak (saltak) med to takflater:
 
 Se `examples/plan.v0.3.two_floors_roof.json`.
 
-## 4. v0.4 (vinkelhus - blocks)
+## 5. v0.4 (vinkelhus - blocks)
 
 v0.4 støtter **vinkelhus** (L, T, H-form) med flere sammenkoblede blokker.
 
@@ -144,7 +181,7 @@ Hver blokk er en selvstendig bygningsdel med egen posisjon, footprint, etasjer o
 
 **Merk:** Valley-beregning (innvendige renner) er ikke implementert ennå.
 
-## 5. v0.5 (rooms-first, skråtak)
+## 6. v0.5 (rooms-first, skråtak)
 
 v0.5 bruker **levels**, **buildings[]** med footprints per level, rooms, stairs, voids, derived walls og skråtak per rom.
 
@@ -182,7 +219,7 @@ v0.5 bruker **levels**, **buildings[]** med footprints per level, rooms, stairs,
 
 Se `examples/plan.v0.5.rooms_first_sloped.json`.
 
-## 6. v1 (rom-basert)
+## 7. v1 (rom-basert)
 
 v1 legger til rom som byggekloss, vegger definert per rom, trapper, og ulike vegghøyder.
 
@@ -332,7 +369,7 @@ v1 legger til rom som byggekloss, vegger definert per rom, trapper, og ulike veg
 
 Begge kan brukes; rooms/walls/stairs er optional.
 
-## 7. Valideringsregler
+## 8. Valideringsregler
 
 ### Felles
 
@@ -355,10 +392,18 @@ Begge kan brukes; rooms/walls/stairs er optional.
 11. `stairs.type`: straight | l | u
 12. `stairs.from_floor_id` og `to_floor_id` må referere til gyldige floors
 
-## 8. Eksempel-JSON
+## 9. Eksempel-JSON
+
+Alle eksempler er i **1.x-format** (version "1.0", units "mm", defaults.wall med thickness_mm/height_mm). Filnavn beholdt for bakoverkompatibilitet.
 
 | Fil | Beskrivelse |
 |-----|-------------|
-| `examples/plan.v0.single.json` | v0, enkel etasje |
-| `examples/plan.v0.3.two_floors_roof.json` | v0.3, to etasjer + tak |
-| `examples/plan.v1.two_floors_rooms_walls_stairs.json` | v1, rom, vegger, trapp |
+| `examples/plan.v0.single.json` | 1.x enkel etasje (floors) |
+| `examples/plan.v0.3.two_floors_roof.json` | 1.x to etasjer + tak |
+| `examples/plan.v0.3.asymmetric_roof.json` | 1.x asymmetrisk tak (equal_pitch) |
+| `examples/plan.v0.3.asymmetric_equal_eave.json` | 1.x asymmetrisk tak (equal_eave) |
+| `examples/plan.v0.4.L-house.json` | 1.x vinkelhus (blocks), L-hus |
+| `examples/plan.v0.4.T-house.json` | 1.x vinkelhus (blocks), T-hus |
+| `examples/plan.v0.4.H-house.json` | 1.x vinkelhus (blocks), H-hus |
+| `examples/plan.v1.two_floors_rooms_walls_stairs.json` | 1.x enkeltbygning med rom, vegger, trapp |
+| `examples/plan.v0.5.rooms_first_sloped.json` | v0.5 (annen struktur; fremtidig utvidelse) |

@@ -3,6 +3,7 @@
  */
 
 import { isV1, isV05 } from './parse.js';
+import { getRoofRiseMm, getRoofRiseGableMm, isViewingSlope } from './facade-logic.js';
 
 /** Normalize polygon point: {x,y} or [x,y] -> [x,y] */
 function toCoords(p) {
@@ -59,7 +60,7 @@ export function pathLengthMm(path) {
     return len;
 }
 
-/** Wall segment to SVG path */
+/** Wall segment to SVG path (x,y in mm; t in mm; scale and pad for SVG coords). */
 function wallSegmentToPath(x1, y1, x2, y2, t, scale, pad) {
     const dx = x2 - x1;
     const dy = y2 - y1;
@@ -76,6 +77,22 @@ function wallSegmentToPath(x1, y1, x2, y2, t, scale, pad) {
     const x2a = pad + (x2 + nx * h) * scale;
     const y2a = pad + (y2 + ny * h) * scale;
     return `M ${x1a} ${y1a} L ${x2a} ${y2a} L ${x2b} ${y2b} L ${x1b} ${y1b} Z`;
+}
+
+/** Wall segment path when coordinates are already in SVG space (e.g. block-local + offset). */
+function wallSegmentToPathSvg(x1Svg, y1Svg, x2Svg, y2Svg, tSvg) {
+    const dx = x2Svg - x1Svg;
+    const dy = y2Svg - y1Svg;
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    const nx = -dy / len;
+    const ny = dx / len;
+    const h = tSvg / 2;
+    return `M ${x1Svg + nx * h} ${y1Svg + ny * h} L ${x2Svg + nx * h} ${y2Svg + ny * h} L ${x2Svg - nx * h} ${y2Svg - ny * h} L ${x1Svg - nx * h} ${y1Svg - ny * h} Z`;
+}
+
+function getMaterialColor(plan, materialId) {
+    const mat = plan?.materialLibrary?.find(m => m.id === materialId);
+    return mat?.color ?? '#a0a0a0';
 }
 
 const FLOOR_FINISH_STYLES = {
@@ -106,7 +123,7 @@ const SVG_DEFS = `<defs>
 </defs>`;
 
 /** v1: 2D rooms + walls with correct thickness */
-function render2Dv1(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad = 40) {
+function render2Dv1(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad = 40, showRidgeLine = false) {
     const fp = activeRoot.footprint ?? {};
     const w = Number(fp.width) ?? 9000;
     const d = Number(fp.depth) ?? 7000;
@@ -132,7 +149,7 @@ function render2Dv1(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad =
         const hl = `${pathPrefix}.rooms.${ri}`;
         const style = getFloorFinishStyle(room.floor_finish);
         const fill = style.pattern ?? style.fill;
-        parts.push(`<path class="svg-highlightable" data-highlight="${hl}" fill="${fill}" stroke="#999" stroke-width="0.5" d="${pathD}"/>`);
+        parts.push(`<path class="svg-highlightable svg-draggable" data-drag-type="room" data-highlight="${hl}" data-room-index="${ri}" fill="${fill}" stroke="#999" stroke-width="0.5" d="${pathD}"/>`);
         ri++;
     }
 
@@ -213,6 +230,8 @@ function render2Dv1(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad =
         }
     }
 
+    if (showRidgeLine && plan.roof) parts.push(ridgeLineSvg(pad, pad, w, d, plan.roof, scale));
+
     const dims = [
         `<line x1="${pad}" y1="${pad - 15}" x2="${pad + w * scale}" y2="${pad - 15}" stroke="#666"/>`,
         `<text x="${pad + w * scale / 2}" y="${pad - 5}" text-anchor="middle" font-size="10" fill="#666">${w}mm</text>`,
@@ -220,7 +239,8 @@ function render2Dv1(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad =
         `<text x="${pad - 8}" y="${pad + d * scale / 2}" text-anchor="middle" font-size="10" fill="#666" transform="rotate(-90 ${pad - 8} ${pad + d * scale / 2})">${d}mm</text>`,
     ];
 
-    svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${SVG_DEFS}${dims.join('')}${parts.join('')}</svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" data-plan-view="v1" data-scale="${scale}" data-pad="${pad}" data-min-x="0" data-min-y="0">${SVG_DEFS}${dims.join('')}${parts.join('')}</svg>`;
+    svgEl.innerHTML = svg;
 }
 
 /** v0.5: 2D rooms + derived walls + voids + stairs */
@@ -336,8 +356,169 @@ function render2Dv05(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad 
     svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${SVG_DEFS}${dims.join('')}${parts.join('')}</svg>`;
 }
 
+/** Direction (dropdown value) to wall name: elevasjon "nord" = vi ser fra nord = sørfasade = front */
+const ELEVATION_TO_WALL = { nord: 'front', sor: 'back', ost: 'right', vest: 'left' };
+
+/** SVG for mønelinje på plan (stiplet). ox,oy = topp-venstre i px; wMm, dMm = bredde/dybde i mm; ridge_offset_mm. */
+function ridgeLineSvg(ox, oy, wMm, dMm, roof, scale) {
+    if (!roof || roof.type !== 'gable') return '';
+    const ridgeDir = (roof.ridge_direction ?? 'x').toLowerCase();
+    const offset = Number(roof.ridge_offset_mm ?? 0) || 0;
+    const w = Number(wMm) || 8000;
+    const d = Number(dMm) || 8000;
+    const dash = 'stroke-dasharray="6,4"';
+    if (ridgeDir === 'x') {
+        const y = oy + (d / 2 - offset) * scale;
+        return `<line x1="${ox}" y1="${y}" x2="${ox + w * scale}" y2="${y}" stroke="#666" stroke-width="1.5" ${dash}/>`;
+    }
+    const x = ox + (w / 2 + offset) * scale;
+    return `<line x1="${x}" y1="${oy}" x2="${x}" y2="${oy + d * scale}" stroke="#666" stroke-width="1.5" ${dash}/>`;
+}
+
+/** Wall name to facade width key: front/back use footprint.width, left/right use depth */
+function getFacadeDimensions(fp, wallName) {
+    const w = Number(fp?.width) ?? 8000;
+    const d = Number(fp?.depth) ?? 8000;
+    if (wallName === 'front' || wallName === 'back') return { width: w, depth: d };
+    return { width: d, depth: w };
+}
+
+/** Single-building elevation: one wall with openings */
+function render2DElevationSingle(svgEl, activeRoot, direction, plan, scale = 0.12, pad = 40) {
+    const fp = activeRoot.footprint ?? {};
+    const wallName = ELEVATION_TO_WALL[direction];
+    if (!wallName) {
+        svgEl.innerHTML = '<p class="svg-placeholder">—</p>';
+        return;
+    }
+    const dims = getFacadeDimensions(fp, wallName);
+    const facadeW = dims.width;
+    const defWall = activeRoot.defaults?.wall ?? plan?.defaults?.wall;
+    const wallH = Number(
+        activeRoot.wall?.height_mm ?? activeRoot.wall?.height
+        ?? defWall?.height_mm ?? defWall?.height ?? 2700
+    ) || 2700;
+    const openings = (activeRoot.openings ?? []).filter(o => o.wall === wallName);
+
+    const vw = Math.max(facadeW * scale + pad * 2, 100);
+    const vh = Math.max(wallH * scale + pad * 2, 80);
+    const ox = pad;
+    const oy = pad;
+    const rectW = Math.max(1, facadeW * scale);
+    const rectH = Math.max(1, wallH * scale);
+
+    const parts = [];
+    parts.push(`<rect x="${ox}" y="${oy}" width="${rectW}" height="${rectH}" fill="#c4b8a8" stroke="#333" stroke-width="1"/>`);
+    for (const o of openings) {
+        const offset = Number(o.offset) ?? 0;
+        const ow = Number(o.width) ?? 900;
+        const oh = Number(o.height) ?? 2100;
+        const sill = Number(o.sill ?? 0);
+        const yFromTop = wallH - sill - oh;
+        const rx = ox + offset * scale;
+        const ry = oy + Math.max(0, yFromTop * scale);
+        const rw = ow * scale;
+        const rh = Math.min(oh * scale, wallH * scale - ry + oy);
+        const fill = (o.type === 'window') ? '#87ceeb' : '#f5f5dc';
+        parts.push(`<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${fill}" stroke="#555"/>`);
+    }
+    const label = { nord: 'Nord (sørfasade)', sor: 'Sør (nordfasade)', ost: 'Øst (vestfasade)', vest: 'Vest (østfasade)' }[direction] || direction;
+    parts.push(`<text x="${ox + rectW / 2}" y="${oy - 8}" text-anchor="middle" font-size="11" fill="#666">${label}</text>`);
+    parts.push(`<text x="${ox + rectW / 2}" y="${oy + rectH + 20}" text-anchor="middle" font-size="10" fill="#666">${Math.round(facadeW)} × ${Math.round(wallH)} mm</text>`);
+    svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${SVG_DEFS}${parts.join('')}</svg>`;
+}
+
+/** Multi-block elevation: one or more facades with roof per block (L, T, H houses) */
+function render2DElevationBlocks(svgEl, activeRoot, direction, scale = 0.12, pad = 40) {
+    const blocks = activeRoot.blocks ?? [];
+    if (!blocks.length) {
+        svgEl.innerHTML = '<p class="svg-placeholder">Ingen blokker å vise.</p>';
+        return;
+    }
+    const wallName = ELEVATION_TO_WALL[direction];
+    if (!wallName) {
+        svgEl.innerHTML = '<p class="svg-placeholder">—</p>';
+        return;
+    }
+    let minX = Infinity, maxX = -Infinity, maxH = 0;
+    const facades = [];
+    for (const block of blocks) {
+        const pos = block.position ?? { x: 0, z: 0 };
+        const fp = block.footprint ?? {};
+        const dims = getFacadeDimensions(fp, wallName);
+        const wallH = Number(block.wall?.height_mm ?? block.wall?.height ?? 2700) || 2700;
+        const openings = (block.openings ?? []).filter(o => o.wall === wallName);
+        const x = (wallName === 'front' || wallName === 'back') ? pos.x : pos.z;
+        const w = dims.width;
+        const roof = block.roof?.type === 'gable' ? block.roof : null;
+        const ridgeDir = roof ? (roof.ridge_direction ?? 'x').toLowerCase() : 'x';
+        const viewingSlope = roof && isViewingSlope(ridgeDir, direction);
+        const roofRiseMm = roof
+            ? (viewingSlope ? getRoofRiseMm(roof, direction, Number(fp.width) || 8000, Number(fp.depth) || 8000) : getRoofRiseGableMm(roof, w))
+            : 0;
+        facades.push({ x, w, wallH, openings, roof, roofRiseMm, dims, fp });
+        minX = Math.min(minX, x);
+        maxX = Math.max(maxX, x + w);
+        maxH = Math.max(maxH, wallH + roofRiseMm);
+    }
+    const totalW = Math.max(maxX - minX, 1);
+    const vw = totalW * scale + pad * 2;
+    const vh = Math.max(maxH * scale + pad * 2, 100);
+
+    const groundY = pad + maxH * scale;
+
+    const parts = [];
+    for (const fa of facades) {
+        const ox = pad + (fa.x - minX) * scale;
+        const rectW = Math.max(1, fa.w * scale);
+        const wallH = fa.wallH * scale;
+        const wallTopY = groundY - wallH;
+
+        parts.push(`<rect x="${ox}" y="${wallTopY}" width="${rectW}" height="${wallH}" fill="#c4b8a8" stroke="#333" stroke-width="1"/>`);
+        for (const o of fa.openings) {
+            const offset = Number(o.offset) ?? 0;
+            const ow = Number(o.width) ?? 900;
+            const oh = Number(o.height) ?? 2100;
+            const sill = Number(o.sill ?? 0);
+            const yFromTop = fa.wallH - sill - oh;
+            const rx = ox + offset * scale;
+            const ry = wallTopY + Math.max(0, yFromTop * scale);
+            const rw = ow * scale;
+            const rh = Math.min(oh * scale, wallH - ry + wallTopY);
+            const fill = (o.type === 'window') ? '#87ceeb' : '#f5f5dc';
+            parts.push(`<rect x="${rx}" y="${ry}" width="${rw}" height="${rh}" fill="${fill}" stroke="#555"/>`);
+        }
+
+        if (fa.roof && fa.roofRiseMm > 0) {
+            const roofH = fa.roofRiseMm * scale;
+            const roofTopY = wallTopY - roofH;
+            const overhangMm = Number(fa.roof.overhang_mm ?? 500) || 500;
+            const roofW = Math.max(1, (fa.w + 2 * overhangMm) * scale);
+            const roofX = ox - overhangMm * scale;
+            const ridgeDir = (fa.roof.ridge_direction ?? 'x').toLowerCase();
+            const viewingSlope = isViewingSlope(ridgeDir, direction);
+
+            if (viewingSlope) {
+                parts.push(`<rect x="${roofX}" y="${roofTopY}" width="${roofW}" height="${roofH}" fill="#6b4423" stroke="#333" stroke-width="1"/>`);
+            } else {
+                const ridgeOffset = Number(fa.roof.ridge_offset_mm ?? 0) || 0;
+                const ridgeCenterX = ridgeOffset === 0
+                    ? ox + rectW / 2
+                    : ox + (fa.w / 2 + (direction === 'vest' || direction === 'sor' ? -ridgeOffset : ridgeOffset)) * scale;
+                parts.push(
+                    `<polygon points="${roofX},${wallTopY} ${roofX + roofW},${wallTopY} ${ridgeCenterX},${roofTopY}" fill="#6b4423" stroke="#333" stroke-width="1"/>`
+                );
+            }
+        }
+    }
+    const label = { nord: 'Nord (sørfasade)', sor: 'Sør (nordfasade)', ost: 'Øst (vestfasade)', vest: 'Vest (østfasade)' }[direction] || direction;
+    parts.push(`<text x="${pad + totalW * scale / 2}" y="${pad - 8}" text-anchor="middle" font-size="11" fill="#666">${label}</text>`);
+    parts.push(`<text x="${pad + totalW * scale / 2}" y="${groundY + 20}" text-anchor="middle" font-size="10" fill="#666">${Math.round(totalW)} × ${Math.round(maxH)} mm</text>`);
+    svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${SVG_DEFS}${parts.join('')}</svg>`;
+}
+
 /** v0/v0.3: footprint + walls + openings */
-function render2Dv0(svgEl, activeRoot, plan, floorIndex, scale = 0.05, pad = 40) {
+function render2Dv0(svgEl, activeRoot, plan, floorIndex, scale = 0.05, pad = 40, showRidgeLine = false) {
     const fp = activeRoot.footprint;
     const w = Number(fp.width) ?? 8000;
     const d = Number(fp.depth) ?? 8000;
@@ -354,6 +535,8 @@ function render2Dv0(svgEl, activeRoot, plan, floorIndex, scale = 0.05, pad = 40)
     const pathPrefix = plan.floors ? `floors.${floorIndex}` : '';
     paths.push(`<path class="svg-highlightable" data-highlight="${pathPrefix || 'f0'}" fill="none" stroke="#333" stroke-width="2" d="${outer}"/>`);
     paths.push(`<path class="svg-highlightable" data-highlight="${pathPrefix || 'f0'}" fill="#f5f5f5" stroke="#666" stroke-width="1" d="${inner}"/>`);
+
+    if (showRidgeLine && plan.roof) paths.push(ridgeLineSvg(pad, pad, w, d, plan.roof, scale));
 
     for (const o of activeRoot.openings ?? []) {
         const len = wallsLen[o.wall] ?? w;
@@ -379,8 +562,8 @@ function render2Dv0(svgEl, activeRoot, plan, floorIndex, scale = 0.05, pad = 40)
     svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${dims.join('')}${paths.join('')}</svg>`;
 }
 
-/** v0.4: Multi-block rendering (L, T, H houses) */
-function render2Dv04(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad = 40) {
+/** v0.4: Multi-block rendering (L, T, H houses) — rooms, derived walls, then exterior band */
+function render2Dv04(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad = 40, showRidgeLine = false) {
     const blocks = activeRoot.blocks ?? [];
     if (!blocks.length) return;
 
@@ -420,13 +603,51 @@ function render2Dv04(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad 
 
         const blockPath = `blocks.${bi}`;
 
-        // Floor fill
-        parts.push(`<rect class="svg-highlightable" data-highlight="${blockPath}" x="${bx}" y="${by}" width="${sw}" height="${sd}" fill="#f5f5dc" stroke="none"/>`);
+        // Floor fill (background) — draggable block
+        parts.push(`<rect class="svg-highlightable svg-draggable" data-drag-type="block" data-highlight="${blockPath}" data-block-index="${bi}" x="${bx}" y="${by}" width="${sw}" height="${sd}" fill="#f5f5dc" stroke="none"/>`);
 
-        // Walls as thick band (exterior)
+        // Block outline (exterior wall band) first
         const outerPath = `M ${bx} ${by} h ${sw} v ${sd} h -${sw} Z`;
         const innerPath = `M ${bx + twScaled} ${by + twScaled} v ${sd - 2 * twScaled} h ${sw - 2 * twScaled} v -${sd - 2 * twScaled} Z`;
         parts.push(`<path d="${outerPath} ${innerPath}" fill="#666" fill-rule="evenodd" stroke="none"/>`);
+
+        // Derived interior walls (rooms-first)
+        const walls = block.walls ?? [];
+        for (let wi = 0; wi < walls.length; wi++) {
+            const wall = walls[wi];
+            const a = wall.a ?? {};
+            const b = wall.b ?? {};
+            const x1Svg = bx + (Number(a.x ?? 0)) * scale;
+            const y1Svg = by + (Number(a.y ?? 0)) * scale;
+            const x2Svg = bx + (Number(b.x ?? 0)) * scale;
+            const y2Svg = by + (Number(b.y ?? 0)) * scale;
+            const tSvg = (Number(wall.thicknessMm ?? 98)) * scale;
+            const fill = getMaterialColor(plan, wall.materialId);
+            const dPath = wallSegmentToPathSvg(x1Svg, y1Svg, x2Svg, y2Svg, tSvg);
+            parts.push(`<path d="${dPath}" fill="${fill}" stroke="#444" stroke-width="1"/>`);
+        }
+
+        // Room polygons and labels on top (tynn linje)
+        const rooms = block.rooms ?? [];
+        const floorIdx = block.floorIndexInBlock ?? 0;
+        for (let ri = 0; ri < rooms.length; ri++) {
+            const room = rooms[ri];
+            const poly = polygonToCoords(room.polygon ?? []);
+            if (poly.length < 3) continue;
+            const pts = poly.map(([px, py]) => `${bx + px * scale},${by + py * scale}`).join(' ');
+            const style = getFloorFinishStyle(room.floor_finish);
+            const pathPrefix = `${blockPath}.floors.${floorIdx}.rooms.${ri}`;
+            parts.push(`<polygon class="svg-highlightable svg-draggable" data-drag-type="room" data-highlight="${pathPrefix}" data-block-index="${bi}" data-room-index="${ri}" points="${pts}" fill="${style.fill}" stroke="#999" stroke-width="0.5"/>`);
+        }
+        for (let ri = 0; ri < rooms.length; ri++) {
+            const room = rooms[ri];
+            const poly = polygonToCoords(room.polygon ?? []);
+            if (poly.length < 3) continue;
+            const [cx, cy] = polygonCentroid(poly);
+            const sx = bx + cx * scale;
+            const sy = by + cy * scale;
+            parts.push(`<text x="${sx}" y="${sy}" text-anchor="middle" dominant-baseline="middle" font-size="10" fill="#333">${room.name ?? room.id ?? ''}</text>`);
+        }
 
         // Openings
         for (const o of block.openings ?? []) {
@@ -444,6 +665,8 @@ function render2Dv04(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad 
         const cx = bx + sw / 2;
         const cy = by + sd / 2;
         parts.push(`<text x="${cx}" y="${cy}" text-anchor="middle" dominant-baseline="middle" font-size="12" fill="#333">${block.blockName ?? block.blockId}</text>`);
+
+        if (showRidgeLine && block.roof) parts.push(ridgeLineSvg(bx, by, bw, bd, block.roof, scale));
     }
 
     // Dimensions
@@ -454,18 +677,61 @@ function render2Dv04(svgEl, activeRoot, plan, floorIndex = 0, scale = 0.05, pad 
         `<text x="${pad - 8}" y="${pad + totalD * scale / 2}" text-anchor="middle" font-size="10" fill="#666" transform="rotate(-90 ${pad - 8} ${pad + totalD * scale / 2})">${totalD}mm</text>`,
     ];
 
-    svgEl.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet">${SVG_DEFS}${dims.join('')}${parts.join('')}</svg>`;
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" width="100%" height="100%" preserveAspectRatio="xMidYMid meet" data-plan-view="v04" data-scale="${scale}" data-pad="${pad}" data-min-x="${minX}" data-min-y="${minY}">${SVG_DEFS}${dims.join('')}${parts.join('')}</svg>`;
+    svgEl.innerHTML = svg;
 }
 
-export function render2D(svgEl, activeRoot, plan, floorIndex = 0) {
-    if (!activeRoot) return;
-    
-    // v0.4 blocks
-    if (activeRoot.isBlocks && activeRoot.blocks?.length) {
-        render2Dv04(svgEl, activeRoot, plan, floorIndex);
+export const ELEVATION_VIEWS = ['nord', 'sor', 'ost', 'vest'];
+
+/** Render only one elevation view (for use in 2×2 elevation panels) */
+export function render2DElevationOnly(svgEl, activeRoot, direction, plan) {
+    const placeholder = '<p class="svg-placeholder">Last en plan for å vise fasade</p>';
+    if (!svgEl) return;
+    if (!activeRoot) {
+        svgEl.innerHTML = placeholder;
         return;
     }
-    
+    const mode = String(direction || '').toLowerCase().trim();
+    if (!ELEVATION_VIEWS.includes(mode)) {
+        svgEl.innerHTML = placeholder;
+        return;
+    }
+    try {
+        if (activeRoot.isBlocks && activeRoot.blocks?.length) {
+            render2DElevationBlocks(svgEl, activeRoot, mode, 0.08, 24);
+        } else if (activeRoot.footprint && (Number(activeRoot.footprint.width) || Number(activeRoot.footprint.depth))) {
+            render2DElevationSingle(svgEl, activeRoot, mode, plan, 0.08, 24);
+        } else {
+            svgEl.innerHTML = '<p class="svg-placeholder">—</p>';
+        }
+    } catch (err) {
+        console.warn('render2DElevationOnly', direction, err);
+        svgEl.innerHTML = '<p class="svg-placeholder">Kunne ikke tegne</p>';
+    }
+}
+
+export function render2D(svgEl, activeRoot, plan, floorIndex = 0, viewMode = 'plan', showRidgeLine = false) {
+    if (!activeRoot) return;
+
+    const mode = String(viewMode || 'plan').toLowerCase().trim();
+    const isElevation = mode && ELEVATION_VIEWS.includes(mode);
+    if (isElevation) {
+        if (activeRoot.isBlocks && activeRoot.blocks?.length) {
+            render2DElevationBlocks(svgEl, activeRoot, mode);
+        } else if (activeRoot.footprint && (activeRoot.footprint.width || activeRoot.footprint.depth)) {
+            render2DElevationSingle(svgEl, activeRoot, mode, plan);
+        } else {
+            svgEl.innerHTML = '<p class="svg-placeholder">Elevasjonsvisning krever footprint.</p>';
+        }
+        return;
+    }
+
+    // v0.4 blocks (plan)
+    if (activeRoot.isBlocks && activeRoot.blocks?.length) {
+        render2Dv04(svgEl, activeRoot, plan, floorIndex, 0.05, 40, showRidgeLine);
+        return;
+    }
+
     const hasV05 = isV05(plan) && (activeRoot.rooms?.length ?? 0) > 0;
     const hasV1 = isV1(plan) && (activeRoot.rooms?.length ?? 0) > 0;
     const hasFootprint = activeRoot.footprint && (activeRoot.footprint.width || activeRoot.footprint.polygon);
@@ -474,9 +740,9 @@ export function render2D(svgEl, activeRoot, plan, floorIndex = 0) {
     if (hasV05) {
         render2Dv05(svgEl, activeRoot, plan, floorIndex);
     } else if (hasV1) {
-        render2Dv1(svgEl, activeRoot, plan, floorIndex);
+        render2Dv1(svgEl, activeRoot, plan, floorIndex, 0.05, 40, showRidgeLine);
     } else if (activeRoot.footprint) {
-        render2Dv0(svgEl, activeRoot, plan, floorIndex);
+        render2Dv0(svgEl, activeRoot, plan, floorIndex, 0.05, 40, showRidgeLine);
     }
 }
 

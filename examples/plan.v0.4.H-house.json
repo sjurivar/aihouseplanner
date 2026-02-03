@@ -1,11 +1,8 @@
 {
+  "version": "1.0",
   "units": "mm",
-  "version": "0.4",
   "defaults": {
-    "wall": {
-      "thickness": 200,
-      "height": 2700
-    }
+    "wall": { "thickness_mm": 200, "height_mm": 2700 }
   },
   "blocks": [
     {
@@ -28,7 +25,7 @@
         "type": "gable",
         "pitch_degrees": 25,
         "overhang_mm": 400,
-        "ridge_direction": "y",
+        "ridge_direction": "x",
         "ridge_offset_mm": 0,
         "ridge_mode": "equal_pitch"
       }
@@ -54,7 +51,7 @@
         "type": "gable",
         "pitch_degrees": 35,
         "overhang_mm": 500,
-        "ridge_direction": "x",
+        "ridge_direction": "y",
         "ridge_offset_mm": 0,
         "ridge_mode": "equal_pitch"
       }
@@ -80,7 +77,7 @@
         "type": "gable",
         "pitch_degrees": 35,
         "overhang_mm": 500,
-        "ridge_direction": "x",
+        "ridge_direction": "y",
         "ridge_offset_mm": 0,
         "ridge_mode": "equal_pitch"
       }

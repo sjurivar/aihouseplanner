@@ -16,7 +16,39 @@ header {
     border-bottom: 1px solid #333;
 }
 h1 { margin: 0; }
-.actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.actions-sep { margin: 0 0.25rem; color: #666; }
+
+.dropdown-wrap { position: relative; }
+.add-menu {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    margin: 0;
+    margin-top: 2px;
+    padding: 0.25rem 0;
+    list-style: none;
+    background: #16213e;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    min-width: 12rem;
+    z-index: 100;
+}
+.add-menu li { margin: 0; }
+.add-menu [role="menuitem"] {
+    display: block;
+    width: 100%;
+    padding: 0.4rem 1rem;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    color: #eee;
+    text-align: left;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+.add-menu [role="menuitem"]:hover { background: #0f3460; }
+
 button, .btn-file {
     padding: 0.5rem 1rem;
     background: #16213e;
@@ -181,11 +213,19 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .panel h2 { margin: 0; font-size: 1rem; }
 .panel-2d-header, .panel-3d-header {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: 1rem;
     margin-bottom: 0.5rem;
 }
 .panel-2d-header label, .panel-3d-header label { font-size: 0.9rem; }
+.panel-2d-header .checkbox-label { cursor: pointer; }
+.panel-2d-header .checkbox-label input { margin-right: 0.35rem; vertical-align: middle; }
+.svg-placeholder {
+    padding: 1rem;
+    color: #666;
+    font-size: 0.9rem;
+}
 #svgContainer {
     min-height: 200px;
     height: 350px;
@@ -200,6 +240,94 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     height: 100%;
     min-height: 200px;
 }
+
+.elevation-panel h2 { margin-bottom: 0.75rem; }
+.elevation-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
+    gap: 0.75rem;
+}
+.elevation-cell {
+    background: #0a0a12;
+    border-radius: 6px;
+    overflow: hidden;
+    border: 1px solid #0f3460;
+    min-height: 0;
+}
+.elevation-cell h3 {
+    margin: 0;
+    padding: 0.4rem 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: #94a3b8;
+    background: #1e293b;
+    border-bottom: 1px solid #0f3460;
+}
+.elevation-svg {
+    min-height: 140px;
+    height: 180px;
+    background: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+.elevation-svg svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+    min-height: 120px;
+    flex-shrink: 0;
+}
+.elevation-svg .svg-placeholder {
+    margin: 0;
+    padding: 0.5rem;
+    color: #64748b;
+    font-size: 0.8rem;
+    text-align: center;
+}
+
+.facade-log-details {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid #0f3460;
+}
+.facade-log-details summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+    color: #94a3b8;
+}
+.facade-log-toolbar {
+    margin: 0.5rem 0;
+}
+.facade-log-toolbar label { font-size: 0.85rem; }
+.facade-log-toolbar select {
+    padding: 0.3rem 0.5rem;
+    background: #0a0a12;
+    color: #e2e8f0;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+.facade-log-pre {
+    margin: 0;
+    padding: 0.5rem;
+    font-size: 0.72rem;
+    line-height: 1.4;
+    color: #cbd5e1;
+    background: #0a0a12;
+    border-radius: 4px;
+    border: 1px solid #0f3460;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 220px;
+    overflow-y: auto;
+}
+.facade-log-pre.facade-log-empty { color: #64748b; font-style: italic; }
+
+.svg-draggable { cursor: grab; }
+
 .svg-highlightable.svg-highlighted {
     filter: drop-shadow(0 0 6px #3b82f6) brightness(1.12);
 }
@@ -261,6 +389,43 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
     font-family: inherit;
     resize: vertical;
 }
+.edit-props-content #editPropsForm {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+.edit-props-content #editPropsForm label {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+}
+.edit-props-content #editPropsForm label:first-of-type { min-width: 100%; }
+.edit-props-content #editPropsForm input[type="text"] { flex: 1; min-width: 10rem; }
+.edit-props-content #editPropsForm input[type="number"] { width: 6rem; }
+.edit-props-content #editPropsForm input {
+    padding: 0.4rem;
+    background: #0a0a12;
+    color: #eee;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+}
+.edit-modal-materials {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+}
+.edit-modal-materials legend { font-size: 0.9rem; }
+.edit-modal-materials select {
+    padding: 0.4rem;
+    background: #0a0a12;
+    color: #eee;
+    border: 1px solid #0f3460;
+    border-radius: 4px;
+    min-width: 10rem;
+}
+
 .modal-actions {
     margin-top: 1rem;
     display: flex;

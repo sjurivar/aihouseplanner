@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Fasadevisning med beregninger</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, sans-serif;
+            margin: 0;
+            padding: 1rem;
+            background: #1a1a2e;
+            color: #e2e8f0;
+        }
+        h1 { margin: 0 0 1rem 0; font-size: 1.25rem; }
+        .toolbar {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        .toolbar label { font-size: 0.9rem; }
+        .toolbar-info { font-size: 0.85rem; color: #94a3b8; }
+        .toolbar select {
+            padding: 0.4rem 0.6rem;
+            background: #16213e;
+            color: #e2e8f0;
+            border: 1px solid #0f3460;
+            border-radius: 4px;
+        }
+        .main {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            gap: 1rem;
+            min-height: 400px;
+        }
+        @media (max-width: 900px) { .main { grid-template-columns: 1fr; } }
+        .panel {
+            background: #16213e;
+            border-radius: 8px;
+            padding: 1rem;
+            border: 1px solid #0f3460;
+        }
+        .panel h2 {
+            margin: 0 0 0.5rem 0;
+            font-size: 0.95rem;
+            color: #94a3b8;
+        }
+        .facade-svg-wrap {
+            background: #fff;
+            border-radius: 4px;
+            min-height: 280px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .facade-svg-wrap svg {
+            width: 100%;
+            height: 100%;
+            min-height: 260px;
+        }
+        .log-panel pre {
+            margin: 0;
+            font-size: 0.75rem;
+            line-height: 1.45;
+            color: #cbd5e1;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+        .log-panel .empty { color: #64748b; font-style: italic; }
+        .no-plan {
+            padding: 2rem;
+            text-align: center;
+            color: #94a3b8;
+        }
+        .no-plan a { color: #60a5fa; }
+    </style>
+</head>
+<body>
+    <h1>Fasadevisning med beregninger</h1>
+    <div class="toolbar">
+        <label>Retning:
+            <select id="directionSelect">
+                <option value="nord">Nord (sørfasade)</option>
+                <option value="sor">Sør (nordfasade)</option>
+                <option value="ost">Øst (vestfasade)</option>
+                <option value="vest">Vest (østfasade)</option>
+            </select>
+        </label>
+        <span class="toolbar-info">Alle etasjer + tak</span>
+    </div>
+    <div id="content" class="main">
+        <div class="panel">
+            <h2>Fasade (SVG)</h2>
+            <div id="svgWrap" class="facade-svg-wrap">
+                <p class="no-plan" id="noPlanMsg">Last en plan i hovedvinduet, deretter åpne denne siden på nytt.</p>
+            </div>
+        </div>
+        <div class="panel log-panel">
+            <h2>Beregninger og logging</h2>
+            <pre id="logOutput" class="empty">Ingen data. Last en plan i hovedvinduet og åpne fasadevinduet på nytt.</pre>
+        </div>
+    </div>
+    <script type="module">
+        import { getFloorList, normalizeToV1 } from './assets/modules/parse.js';
+        import { computeFullFacadeWithLog } from './assets/modules/facade-logic.js';
+
+        const STORAGE_PLAN = 'aihouseplanner_plan';
+
+        const directionSelect = document.getElementById('directionSelect');
+        const svgWrap = document.getElementById('svgWrap');
+        const logOutput = document.getElementById('logOutput');
+        const noPlanMsg = document.getElementById('noPlanMsg');
+
+        function getPlan() {
+            const raw = sessionStorage.getItem(STORAGE_PLAN);
+            if (!raw) return null;
+            try {
+                return normalizeToV1(JSON.parse(raw));
+            } catch {
+                return null;
+            }
+        }
+
+        function render() {
+            const plan = getPlan();
+            if (!plan) {
+                noPlanMsg.hidden = false;
+                svgWrap.querySelector('svg')?.remove();
+                logOutput.textContent = 'Ingen plan i minnet. Last en plan i hovedvinduet, klikk "Fasade i eget vindu", og åpne denne siden på nytt.';
+                logOutput.classList.add('empty');
+                return;
+            }
+            noPlanMsg.hidden = true;
+
+            const floors = getFloorList(plan);
+            if (plan.blocks?.length) {
+                logOutput.textContent = 'Plan med blokker (vinkelhus): full fasade med logging støttes kun for enkeltbygning. Bruk 2×2-fasader i hovedvinduet.';
+                logOutput.classList.add('empty');
+                svgWrap.innerHTML = '<p class="no-plan">Vinkelhus: bruk fasadepanelene i hovedvinduet.</p>';
+                return;
+            }
+            if (!floors?.length) {
+                logOutput.textContent = 'Ingen etasjer i planen.';
+                logOutput.classList.add('empty');
+                svgWrap.innerHTML = '<p class="no-plan">Ingen etasjer.</p>';
+                return;
+            }
+
+            const direction = directionSelect.value;
+            const { svgHtml, logLines } = computeFullFacadeWithLog(plan, direction, { scale: 0.12, pad: 40 });
+
+            const headerLines = [
+                `Plan: version ${plan.version ?? '—'}, units ${plan.units ?? '—'}`,
+                `Visning: alle etasjer (${floors.length}) + tak`,
+                ''
+            ];
+            logOutput.textContent = headerLines.join('\n') + logLines.join('\n');
+            logOutput.classList.remove('empty');
+
+            if (svgHtml) {
+                svgWrap.innerHTML = svgHtml;
+            } else {
+                svgWrap.innerHTML = '<p class="no-plan">Kunne ikke tegne fasade.</p>';
+            }
+        }
+
+        directionSelect.addEventListener('change', render);
+
+        render();
+    </script>
+</body>
+</html>

@@ -26,14 +26,29 @@ class PlanValidator
         }
 
         $floors = $plan['floors'] ?? null;
+        $blocks = $plan['blocks'] ?? null;
         $footprint = $plan['footprint'] ?? null;
         $wall = $plan['wall'] ?? $plan['defaults']['wall'] ?? null;
+        $defaultWall = $plan['defaults']['wall'] ?? null;
 
-        if ($floors !== null && is_array($floors)) {
+        if ($blocks !== null && is_array($blocks)) {
+            foreach ($blocks as $block) {
+                $blockFloors = $block['floors'] ?? [];
+                foreach ($blockFloors as $floor) {
+                    $errors = array_merge(
+                        $errors,
+                        $this->validateFloor($floor, $defaultWall)
+                    );
+                }
+                if (isset($block['roof']) && is_array($block['roof'])) {
+                    $errors = array_merge($errors, $this->validateRoof($block['roof']));
+                }
+            }
+        } elseif ($floors !== null && is_array($floors)) {
             foreach ($floors as $floor) {
                 $errors = array_merge(
                     $errors,
-                    $this->validateFloor($floor, $plan['defaults']['wall'] ?? null)
+                    $this->validateFloor($floor, $defaultWall)
                 );
             }
         } else {
@@ -92,8 +107,8 @@ class PlanValidator
     private function validateWall(array $wall, float $width, float $depth): array
     {
         $errors = [];
-        $t = $wall['thickness'] ?? 0;
-        $h = $wall['height'] ?? 0;
+        $t = $wall['thickness_mm'] ?? $wall['thickness'] ?? 0;
+        $h = $wall['height_mm'] ?? $wall['height'] ?? 0;
         if (!is_numeric($t) || $t <= 0) {
             $errors[] = 'wall.thickness må være > 0';
         }

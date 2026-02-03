@@ -1,5 +1,6 @@
 /**
- * JSON parsing and format detection
+ * JSON parsing and format detection.
+ * All loaded plans are normalized to 1.x in memory (see normalizeToV1).
  */
 
 export function parseJson(text) {
@@ -31,6 +32,64 @@ export function detectFormat(plan) {
         return plan.roof ? 'v0.3' : 'v0.2';
     }
     return plan.footprint ? 'v0' : null;
+}
+
+/** Normalize defaults.wall to thickness_mm / height_mm for 1.x */
+function normalizeDefaults(plan) {
+    const def = plan?.defaults;
+    if (!def || typeof def !== 'object') return plan?.defaults ?? null;
+    const w = def.wall;
+    if (!w || typeof w !== 'object') return def;
+    const t = w.thickness_mm ?? w.thickness ?? 200;
+    const h = w.height_mm ?? w.height ?? 2700;
+    return {
+        ...def,
+        wall: { thickness_mm: Number(t) || 200, height_mm: Number(h) || 2700 },
+    };
+}
+
+/**
+ * Normalize any supported plan to canonical 1.x format (version "1.0", defaults.wall with thickness_mm/height_mm).
+ * Structure is preserved: floors stay floors, blocks stay blocks.
+ */
+export function normalizeToV1(plan) {
+    if (!plan || typeof plan !== 'object') return null;
+    const defaults = normalizeDefaults(plan);
+    const normalized = { ...plan, defaults: defaults ?? plan.defaults };
+
+    if (isV1(plan) && (plan.floors?.length > 0 || plan.blocks?.length > 0)) {
+        normalized.version = String(plan.version).startsWith('1') ? plan.version : '1.0';
+        return normalized;
+    }
+    if (isV04(plan)) {
+        normalized.version = '1.0';
+        return normalized;
+    }
+    if (plan.floors && Array.isArray(plan.floors)) {
+        normalized.version = '1.0';
+        return normalized;
+    }
+    if (plan.footprint && !plan.floors) {
+        normalized.version = '1.0';
+        normalized.floors = [{
+            id: 'f0',
+            name: 'Etasje',
+            level: 0,
+            elevation_mm: 0,
+            footprint: plan.footprint,
+            wall: plan.wall,
+            openings: plan.openings ?? [],
+        }];
+        delete normalized.footprint;
+        delete normalized.wall;
+        delete normalized.openings;
+        return normalized;
+    }
+    if (isV05(plan)) {
+        normalized.version = '1.0';
+        return normalized;
+    }
+    return normalized;
 }
 
 export function getBlocks(plan) {
@@ -103,12 +162,16 @@ export function getActivePlanRoot(plan, selectedFloorId) {
             defaults: plan.defaults,
         };
     }
-    // v0.4 blocks - return combined view of all blocks for this floor
+    // v0.4 blocks - return combined view of all blocks for this floor (with derived walls)
     if (isV04(plan)) {
         const blocksData = [];
         for (const block of plan.blocks) {
-            const floor = (block.floors ?? []).find(f => f.id === selectedFloorId) ?? (block.floors ?? [])[0];
+            const floors = block.floors ?? [];
+            const floorIndex = floors.findIndex(f => f.id === selectedFloorId);
+            const floor = floorIndex >= 0 ? floors[floorIndex] : floors[0];
             if (!floor) continue;
+            const levelKey = `${block.id}:${floor.id}`;
+            const walls = plan.derived?.wallsByLevel?.[levelKey] ?? [];
             blocksData.push({
                 blockId: block.id,
                 blockName: block.name,
@@ -116,8 +179,11 @@ export function getActivePlanRoot(plan, selectedFloorId) {
                 footprint: block.footprint ?? {},
                 wall: normWall(floor.wall ?? def),
                 openings: floor.openings ?? [],
+                rooms: floor.rooms ?? [],
+                walls,
                 elevation_mm: floor.elevation_mm ?? 0,
                 roof: block.roof,
+                floorIndexInBlock: floorIndex >= 0 ? floorIndex : 0,
             });
         }
         return {
@@ -178,7 +244,7 @@ export function getAllFloorRoots(plan) {
             };
         });
     }
-    // v0.4 blocks - return all blocks with all their floors
+    // v0.4 blocks - return all blocks with all their floors (incl. derived walls for 3D)
     if (isV04(plan)) {
         const results = [];
         for (const block of plan.blocks) {
@@ -186,6 +252,8 @@ export function getAllFloorRoots(plan) {
                 const wall = floor.wall ?? def;
                 const w = wall?.thickness_mm ?? wall?.thickness ?? defWall.thickness;
                 const h = wall?.height_mm ?? wall?.height ?? defWall.height;
+                const levelKey = `${block.id}:${floor.id}`;
+                const walls = plan.derived?.wallsByLevel?.[levelKey] ?? [];
                 results.push({
                     isBlock: true,
                     blockId: block.id,
@@ -194,6 +262,8 @@ export function getAllFloorRoots(plan) {
                     footprint: block.footprint ?? {},
                     wall: { thickness: w, height: h },
                     openings: floor.openings ?? [],
+                    rooms: floor.rooms ?? [],
+                    walls,
                     elevation_mm: floor.elevation_mm ?? 0,
                     floorId: floor.id,
                     floorName: floor.name,

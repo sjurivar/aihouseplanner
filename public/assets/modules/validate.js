@@ -16,9 +16,12 @@ export function validatePlan(plan) {
         const t = r.wall?.thickness ?? r.wall?.thickness_mm ?? 0;
         if (t > 0 && w > 0 && d > 0 && t * 2 >= Math.min(w, d)) err.push(`${r.floorName}: veggtykkelse for stor`);
     }
-    // v1: basic structure validation
+    // v1 / 1.x: basic structure validation (floors or blocks)
     if (isV1(plan)) {
-        for (const f of plan.floors ?? []) {
+        const floorList = plan.floors ?? [];
+        const fromBlocks = (plan.blocks ?? []).flatMap(b => b.floors ?? []);
+        const allFloors = floorList.length ? floorList : fromBlocks;
+        for (const f of allFloors) {
             for (const room of f.rooms ?? []) {
                 if (!room.polygon?.length || room.polygon.length < 3) err.push(`Rom ${room.id}: polygon trenger min 3 punkter`);
             }

@@ -3,7 +3,8 @@
  */
 
 import { isV05, isV04 } from './parse.js';
-import { scene3d } from './state.js';
+import { scene3d, plan as statePlan } from './state.js';
+import { regenerateDerivedForLevel } from './derived-walls.js';
 
 function escapeHtml(s) {
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -25,7 +26,12 @@ export function buildPlanHierarchy(plan) {
                 const f = block.floors[fi];
                 const floorLabel = f.name ?? f.id ?? 'Etasje';
                 const floorNode = { label: floorLabel, children: [], data: f, path: ['blocks', bi, 'floors', fi] };
-                
+                // Rooms
+                for (let ri = 0; ri < (f.rooms ?? []).length; ri++) {
+                    const r = f.rooms[ri];
+                    const roomLabel = r.name ?? r.id ?? 'Rom';
+                    floorNode.children.push({ label: roomLabel, children: [], data: r, path: ['blocks', bi, 'floors', fi, 'rooms', ri] });
+                }
                 // Openings
                 for (let oi = 0; oi < (f.openings ?? []).length; oi++) {
                     const o = f.openings[oi];
@@ -201,6 +207,60 @@ export function getDataByPath(plan, pathStr) {
     return cur;
 }
 
+/** Parse path for dedicated edit: block, floor, or room. */
+export function parseEditPath(pathStr) {
+    if (!pathStr) return null;
+    const parts = pathStr.split('.');
+    if (parts.length === 2 && parts[0] === 'blocks') {
+        const i = parseInt(parts[1], 10);
+        if (!isNaN(i)) return { type: 'block', blockIndex: i };
+    }
+    if (parts.length === 4 && parts[0] === 'blocks' && parts[2] === 'floors') {
+        const bi = parseInt(parts[1], 10), fi = parseInt(parts[3], 10);
+        if (!isNaN(bi) && !isNaN(fi)) return { type: 'floor', blockIndex: bi, floorIndex: fi, inBlocks: true };
+    }
+    if (parts.length === 2 && parts[0] === 'floors') {
+        const fi = parseInt(parts[1], 10);
+        if (!isNaN(fi)) return { type: 'floor', floorIndex: fi, inBlocks: false };
+    }
+    if (parts.length === 6 && parts[0] === 'blocks' && parts[2] === 'floors' && parts[4] === 'rooms') {
+        const bi = parseInt(parts[1], 10), fi = parseInt(parts[3], 10), ri = parseInt(parts[5], 10);
+        if (!isNaN(bi) && !isNaN(fi) && !isNaN(ri)) return { type: 'room', blockIndex: bi, floorIndex: fi, roomIndex: ri, inBlocks: true };
+    }
+    if (parts.length === 4 && parts[0] === 'floors' && parts[2] === 'rooms') {
+        const fi = parseInt(parts[1], 10), ri = parseInt(parts[3], 10);
+        if (!isNaN(fi) && !isNaN(ri)) return { type: 'room', floorIndex: fi, roomIndex: ri, inBlocks: false };
+    }
+    return null;
+}
+
+/** Bounding box of room polygon [[x,y], ...] in mm. */
+export function getRoomRectFromPolygon(polygon) {
+    if (!Array.isArray(polygon) || polygon.length === 0) return { x: 0, y: 0, width: 3000, depth: 3000 };
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const p of polygon) {
+        const x = Number(p[0]) || 0, y = Number(p[1]) || 0;
+        minX = Math.min(minX, x); minY = Math.min(minY, y);
+        maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
+    }
+    return { x: minX, y: minY, width: Math.max(0, maxX - minX) || 3000, depth: Math.max(0, maxY - minY) || 3000 };
+}
+
+function polygonFromRect(x, y, w, d) {
+    return [[x, y], [x + w, y], [x + w, y + d], [x, y + d]];
+}
+
+/** Build HTML for a material dropdown (plan.materialLibrary). category: 'floor'|'wall'|'ceiling'|'roof'. */
+function materialPickerHtml(plan, category, currentId, nameAttr) {
+    const lib = plan?.materialLibrary ?? [];
+    const options = lib
+        .filter(m => !category || m.category === category)
+        .map(m => `<option value="${escapeHtml(m.id)}" ${m.id === currentId ? 'selected' : ''}>${escapeHtml(m.name ?? m.id)}</option>`)
+        .join('');
+    const label = { floor: 'Gulv', wall: 'Vegg', ceiling: 'Tak (innvendig)', roof: 'Tak (utvendig)' }[category] ?? category;
+    return `<label>${label} <select name="${nameAttr}">${options || '<option value="">—</option>'}</select></label>`;
+}
+
 export function applyTreeEdit(plan, newData, pathStr) {
     if (!pathStr) {
         if (newData && typeof newData === 'object') {
@@ -225,8 +285,189 @@ export function applyTreeEdit(plan, newData, pathStr) {
     }
 }
 
+let currentPropsEdit = null;
+
+function wireEditPropsModal() {
+    const modal = document.getElementById('editPropsModal');
+    const saveBtn = document.getElementById('editPropsSave');
+    const cancelBtn = document.getElementById('editPropsCancel');
+    if (!modal || !saveBtn || saveBtn._editPropsWired) return;
+    saveBtn._editPropsWired = true;
+    saveBtn.addEventListener('click', () => {
+        const plan = statePlan;
+        if (!currentPropsEdit || !plan) return;
+        const { pathStr, type, updateUICallback } = currentPropsEdit;
+        const form = document.getElementById('editPropsForm');
+        if (!form) return;
+        if (type === 'block') {
+            const nameVal = (form.querySelector('[name="blockName"]')?.value ?? '').trim();
+            const x = Number(form.querySelector('[name="blockPosX"]')?.value) || 0;
+            const z = Number(form.querySelector('[name="blockPosZ"]')?.value) || 0;
+            const width = Number(form.querySelector('[name="blockWidth"]')?.value) || 8000;
+            const depth = Number(form.querySelector('[name="blockDepth"]')?.value) || 8000;
+            const matFloor = form.querySelector('[name="blockMaterialFloor"]')?.value?.trim();
+            const matWall = form.querySelector('[name="blockMaterialWall"]')?.value?.trim();
+            const matCeiling = form.querySelector('[name="blockMaterialCeiling"]')?.value?.trim();
+            const matRoof = form.querySelector('[name="blockMaterialRoof"]')?.value?.trim();
+            const block = getDataByPath(plan, pathStr);
+            if (block) {
+                const materials = { ...(block.materials || {}) };
+                if (matFloor) materials.floor = matFloor;
+                if (matWall) materials.wall = matWall;
+                if (matCeiling) materials.ceiling = matCeiling;
+                if (matRoof) materials.roof = matRoof;
+                const updated = {
+                    ...block,
+                    name: nameVal || block.id || block.name,
+                    position: { x, z },
+                    footprint: { ...(block.footprint || {}), type: 'rect', width, depth },
+                    materials: Object.keys(materials).length ? materials : undefined,
+                };
+                applyTreeEdit(plan, updated, pathStr);
+                const editInfo = parseEditPath(pathStr);
+                if (editInfo?.type === 'block' && plan.blocks?.[editInfo.blockIndex]) {
+                    const b = plan.blocks[editInfo.blockIndex];
+                    for (const floor of b.floors ?? []) {
+                        regenerateDerivedForLevel(plan, b.id, floor.id);
+                    }
+                }
+            }
+        } else if (type === 'room') {
+            const nameVal = (form.querySelector('[name="roomName"]')?.value ?? '').trim();
+            const x = Number(form.querySelector('[name="roomX"]')?.value) || 0;
+            const y = Number(form.querySelector('[name="roomY"]')?.value) || 0;
+            const width = Number(form.querySelector('[name="roomWidth"]')?.value) || 3000;
+            const depth = Number(form.querySelector('[name="roomDepth"]')?.value) || 3000;
+            const wallThickness = Number(form.querySelector('[name="roomWallThickness"]')?.value);
+            const matFloor = form.querySelector('[name="roomMaterialFloor"]')?.value?.trim();
+            const matWall = form.querySelector('[name="roomMaterialWall"]')?.value?.trim();
+            const matCeiling = form.querySelector('[name="roomMaterialCeiling"]')?.value?.trim();
+            const room = getDataByPath(plan, pathStr);
+            if (room) {
+                const materials = { ...(room.materials || {}) };
+                if (matFloor) materials.floor = matFloor;
+                if (matWall) materials.wall = matWall;
+                if (matCeiling) materials.ceiling = matCeiling;
+                const updated = { ...room, name: nameVal || room.id || room.name, polygon: polygonFromRect(x, y, width, depth) };
+                if (!Number.isNaN(wallThickness) && wallThickness >= 0) updated.wall_thickness_mm = wallThickness;
+                if (Object.keys(materials).length) updated.materials = materials;
+                applyTreeEdit(plan, updated, pathStr);
+                const editInfo = parseEditPath(pathStr);
+                if (editInfo?.type === 'room' && editInfo.inBlocks && plan.blocks?.[editInfo.blockIndex]) {
+                    const b = plan.blocks[editInfo.blockIndex];
+                    const floor = b.floors?.[editInfo.floorIndex];
+                    if (floor?.id) regenerateDerivedForLevel(plan, b.id, floor.id);
+                }
+            }
+        } else if (type === 'floor') {
+            const nameVal = (form.querySelector('[name="floorName"]')?.value ?? '').trim();
+            const elev = Number(form.querySelector('[name="floorElevation"]')?.value);
+            const floor = getDataByPath(plan, pathStr);
+            if (floor) {
+                const updated = { ...floor, name: nameVal || floor.id || floor.name };
+                if (!Number.isNaN(elev)) updated.elevation_mm = elev;
+                applyTreeEdit(plan, updated, pathStr);
+            }
+        }
+        if (updateUICallback) updateUICallback();
+        modal.hidden = true;
+        currentPropsEdit = null;
+    });
+    cancelBtn?.addEventListener('click', () => { modal.hidden = true; currentPropsEdit = null; });
+}
+
+export function showBlockEditModal(plan, pathStr, label, updateUICallback) {
+    const block = getDataByPath(plan, pathStr);
+    if (!block || !pathStr) return;
+    wireEditPropsModal();
+    const modal = document.getElementById('editPropsModal');
+    const title = document.getElementById('editPropsTitle');
+    const formEl = document.getElementById('editPropsForm');
+    if (!modal || !title || !formEl) return;
+    const pos = block.position ?? { x: 0, z: 0 };
+    const fp = block.footprint ?? {};
+    const w = fp.width ?? 8000;
+    const d = fp.depth ?? 8000;
+    const mats = block.materials ?? {};
+    const defMats = plan?.defaults?.materials ?? {};
+    title.textContent = 'Rediger blokk';
+    formEl.innerHTML = `
+        <label>Navn <input type="text" name="blockName" value="${escapeHtml(block.name ?? block.id ?? '')}" placeholder="Navn på blokk"></label>
+        <label>Posisjon X (mm) <input type="number" name="blockPosX" value="${pos.x ?? 0}" step="100"></label>
+        <label>Posisjon Z (mm) <input type="number" name="blockPosZ" value="${pos.z ?? 0}" step="100"></label>
+        <label>Bredde (mm) <input type="number" name="blockWidth" value="${w}" min="1000" step="100"></label>
+        <label>Dybde (mm) <input type="number" name="blockDepth" value="${d}" min="1000" step="100"></label>
+        <fieldset class="edit-modal-materials"><legend>Materialer</legend>
+        ${materialPickerHtml(plan, 'floor', mats.floor ?? defMats.floor ?? '', 'blockMaterialFloor')}
+        ${materialPickerHtml(plan, 'wall', mats.wall ?? defMats.wall ?? '', 'blockMaterialWall')}
+        ${materialPickerHtml(plan, 'ceiling', mats.ceiling ?? defMats.ceiling ?? '', 'blockMaterialCeiling')}
+        ${materialPickerHtml(plan, 'roof', mats.roof ?? defMats.roof ?? '', 'blockMaterialRoof')}
+        </fieldset>`;
+    currentPropsEdit = { pathStr, type: 'block', updateUICallback };
+    modal.hidden = false;
+}
+
+export function showRoomEditModal(plan, pathStr, label, updateUICallback) {
+    const room = getDataByPath(plan, pathStr);
+    if (!room || !pathStr) return;
+    wireEditPropsModal();
+    const rect = getRoomRectFromPolygon(room.polygon);
+    const modal = document.getElementById('editPropsModal');
+    const title = document.getElementById('editPropsTitle');
+    const formEl = document.getElementById('editPropsForm');
+    if (!modal || !title || !formEl) return;
+    const wallThick = room.wall_thickness_mm ?? 0;
+    const mats = room.materials ?? {};
+    const defMats = plan?.defaults?.materials ?? {};
+    title.textContent = 'Rediger rom';
+    formEl.innerHTML = `
+        <label>Navn <input type="text" name="roomName" value="${escapeHtml(room.name ?? room.id ?? '')}" placeholder="Navn på rom"></label>
+        <label>X (mm) <input type="number" name="roomX" value="${rect.x}" step="100"></label>
+        <label>Y (mm) <input type="number" name="roomY" value="${rect.y}" step="100"></label>
+        <label>Bredde (mm) <input type="number" name="roomWidth" value="${rect.width}" min="500" step="100"></label>
+        <label>Dybde (mm) <input type="number" name="roomDepth" value="${rect.depth}" min="500" step="100"></label>
+        <label>Veggtykkelse (mm) <input type="number" name="roomWallThickness" value="${wallThick}" min="0" step="10" placeholder="Innvendig vegg"></label>
+        <fieldset class="edit-modal-materials"><legend>Materialer</legend>
+        ${materialPickerHtml(plan, 'floor', mats.floor ?? defMats.floor ?? '', 'roomMaterialFloor')}
+        ${materialPickerHtml(plan, 'wall', mats.wall ?? defMats.wall ?? '', 'roomMaterialWall')}
+        ${materialPickerHtml(plan, 'ceiling', mats.ceiling ?? defMats.ceiling ?? '', 'roomMaterialCeiling')}
+        </fieldset>`;
+    currentPropsEdit = { pathStr, type: 'room', updateUICallback };
+    modal.hidden = false;
+}
+
+export function showFloorEditModal(plan, pathStr, label, updateUICallback) {
+    const floor = getDataByPath(plan, pathStr);
+    if (!floor || !pathStr) return;
+    wireEditPropsModal();
+    const modal = document.getElementById('editPropsModal');
+    const title = document.getElementById('editPropsTitle');
+    const formEl = document.getElementById('editPropsForm');
+    if (!modal || !title || !formEl) return;
+    const elev = floor.elevation_mm ?? 0;
+    title.textContent = 'Rediger etasje';
+    formEl.innerHTML = `
+        <label>Navn <input type="text" name="floorName" value="${escapeHtml(floor.name ?? floor.id ?? '')}" placeholder="Navn på etasje"></label>
+        <label>Høyde over terreng (mm) <input type="number" name="floorElevation" value="${elev}" step="100"></label>`;
+    currentPropsEdit = { pathStr, type: 'floor', updateUICallback };
+    modal.hidden = false;
+}
+
 export function showTreeEditModal(plan, pathStr, label, updateUICallback) {
     if (!plan) return;
+    const editInfo = parseEditPath(pathStr);
+    if (editInfo?.type === 'block') {
+        showBlockEditModal(plan, pathStr, label, updateUICallback);
+        return;
+    }
+    if (editInfo?.type === 'floor') {
+        showFloorEditModal(plan, pathStr, label, updateUICallback);
+        return;
+    }
+    if (editInfo?.type === 'room') {
+        showRoomEditModal(plan, pathStr, label, updateUICallback);
+        return;
+    }
     const data = pathStr ? getDataByPath(plan, pathStr) : plan;
     if (data === undefined) return;
     const jsonStr = JSON.stringify(data, null, 2);

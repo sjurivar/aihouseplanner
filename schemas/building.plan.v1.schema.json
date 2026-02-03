@@ -2,9 +2,13 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://aihouseplanner.local/schemas/building.plan.v1.schema.json",
   "title": "BuildingPlanV1",
-  "description": "AI House Planner v1 building plan format — rooms, walls, stairs",
+  "description": "AI House Planner 1.x building plan — single building (floors) or multi-block (blocks)",
   "type": "object",
-  "required": ["version", "units", "floors"],
+  "required": ["version", "units"],
+  "oneOf": [
+    { "required": ["floors"] },
+    { "required": ["blocks"] }
+  ],
   "properties": {
     "version": { "type": "string", "pattern": "^1" },
     "units": { "type": "string", "const": "mm" },
@@ -34,13 +38,57 @@
         "type": { "type": "string", "const": "gable" },
         "pitch_degrees": { "type": "number", "minimum": 5, "maximum": 60 },
         "overhang_mm": { "type": "number", "minimum": 0, "maximum": 2000 },
-        "thickness_mm": { "type": "number", "minimum": 10, "maximum": 500 },
+        "ridge_offset_mm": { "type": "number" },
+        "ridge_mode": { "type": "string", "enum": ["equal_pitch", "equal_eave"] },
         "ridge_direction": { "type": "string", "enum": ["x", "y"] },
-        "eave_height_mode": { "type": "string", "const": "top_walls" }
+        "eave_height_mm": { "type": "number", "minimum": 0 },
+        "thickness_mm": { "type": "number", "minimum": 10, "maximum": 500 },
+        "eave_height_mode": { "type": "string", "const": "top_walls" },
+        "material": { "type": "string" }
       }
+    },
+    "blocks": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/Block" }
     }
   },
   "$defs": {
+    "Block": {
+      "type": "object",
+      "required": ["id", "position", "footprint", "floors"],
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "position": { "$ref": "#/$defs/Position" },
+        "footprint": { "$ref": "#/$defs/Footprint" },
+        "floors": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/FloorV1" }
+        },
+        "roof": {
+          "type": "object",
+          "properties": {
+            "type": { "type": "string", "const": "gable" },
+            "pitch_degrees": { "type": "number", "minimum": 5, "maximum": 60 },
+            "overhang_mm": { "type": "number", "minimum": 0, "maximum": 2000 },
+            "ridge_offset_mm": { "type": "number" },
+            "ridge_mode": { "type": "string", "enum": ["equal_pitch", "equal_eave"] },
+            "ridge_direction": { "type": "string", "enum": ["x", "y"] },
+            "eave_height_mm": { "type": "number" },
+            "material": { "type": "string" }
+          }
+        }
+      }
+    },
+    "Position": {
+      "type": "object",
+      "required": ["x", "z"],
+      "properties": {
+        "x": { "type": "number" },
+        "z": { "type": "number" }
+      }
+    },
     "Footprint": {
       "type": "object",
       "required": ["type", "width", "depth"],

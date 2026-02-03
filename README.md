@@ -28,6 +28,14 @@ Se [docs/json-building-format.md](docs/json-building-format.md) for full spesifi
 
 Eksempler: `examples/plan.v0.single.json`, `examples/plan.v0.3.two_floors_roof.json`
 
+### Derived walls (rooms-first)
+
+Innvendige vegger er **avledet** fra rompolygoner: kun kanter som deles av nøyaktig to rom blir vegg-segmenter. Veggene lagres i `plan.derived.wallsByLevel[blockId:levelId]` og regenereres når rom lagres (modal), dras/slippes eller legges til. Segmenter matches med EPS=5mm snapping. Veggtykkelse kommer fra `plan.defaults.wallRules.interior.thicknessMm` (eller `betweenUnits`), med fallback til `room.wall_thickness_mm`.
+
+### Materialer
+
+Materialer settes i rekkefølge: **defaults** (plan) → **blokk** → **rom**. I blokk-modal kan du velge gulv/vegg/tak/roof; i rom-modal gulv/vegg/tak. Avledede vegger får materiale fra samme hierarki (default → blokk → rom). `plan.materialLibrary` inneholder tilgjengelige materialer (id, name, category, color).
+
 ## Standard-sjekk
 
 ```bash

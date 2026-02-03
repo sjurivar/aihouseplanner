@@ -1,11 +1,8 @@
 {
+  "version": "1.0",
   "units": "mm",
-  "version": "0.4",
   "defaults": {
-    "wall": {
-      "thickness": 200,
-      "height": 2700
-    }
+    "wall": { "thickness_mm": 200, "height_mm": 2700 }
   },
   "blocks": [
     {

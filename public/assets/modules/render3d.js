@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from '../../vendor/OrbitControls.js';
 import { scene3d, renderer3d, camera3d, controls3d, set3DContext } from './state.js';
 import { isV05, isV1 } from './parse.js';
+import { computeRoofGeometry } from './roof-geometry.js';
 
 export function init3D() {
     const canvas = document.getElementById('canvas3d');
@@ -83,148 +84,140 @@ function addGroundAndHorizon() {
     scene3d.add(horizonLine);
 }
 
+const ROOF_MATERIAL_COLORS = {
+    tiles: 0x8b4513,
+    metal: 0x708090,
+    shingles: 0x5c4033,
+};
+
+function getMaterialColorHex(plan, materialId) {
+    const mat = plan?.materialLibrary?.find(m => m.id === materialId);
+    if (!mat?.color) return 0xc4b8a8;
+    const hex = mat.color.replace(/^#/, '');
+    return parseInt(hex.length === 6 ? hex : hex.slice(0, 6), 16);
+}
+
+/** Create a wall segment mesh: mid-line a->b, thickness t, height h (all in mm). Block-local coords; scale and blockOffset applied. */
+function wallSegmentMesh(ax, ay, bx, by, thicknessMm, heightMm, scale, blockOffsetX, blockOffsetZ, w, d, elev, plan, materialId) {
+    const dx = (bx - ax) * scale;
+    const dz = (by - ay) * scale;
+    const length = Math.sqrt(dx * dx + dz * dz) || 0.001;
+    const thickness = thicknessMm * scale;
+    const height = heightMm * scale;
+    const midX = blockOffsetX - w / 2 + (ax + bx) / 2 * scale;
+    const midZ = blockOffsetZ - d / 2 + (ay + by) / 2 * scale;
+    const geom = new THREE.BoxGeometry(thickness, height, length);
+    const color = getMaterialColorHex(plan, materialId);
+    const mat = new THREE.MeshLambertMaterial({ color });
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.position.set(midX, elev + height / 2, midZ);
+    mesh.rotation.y = Math.atan2(-dx, dz);
+    return mesh;
+}
+
+/** Quad mellom fire hjørnepunkter: ridge-kant og gesims-kant. Vertices 0,1 = ridge, 2,3 = gesims. */
+function roofQuadGeometry(p0, p1, p2, p3) {
+    const pos = new Float32Array(4 * 3);
+    pos[0] = p0.x; pos[1] = p0.y; pos[2] = p0.z;
+    pos[3] = p1.x; pos[4] = p1.y; pos[5] = p1.z;
+    pos[6] = p2.x; pos[7] = p2.y; pos[8] = p2.z;
+    pos[9] = p3.x; pos[10] = p3.y; pos[11] = p3.z;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setIndex([0, 1, 2, 0, 2, 3]);
+    geo.computeVertexNormals();
+    return geo;
+}
+
 /**
- * Build gable roof meshes. All geometry is computed in local coordinates (block center at 0,0).
- * Optional centerOffsetX/Z: when provided (e.g. for multi-block), meshes are shifted so they
- * sit correctly in world space at (centerOffsetX, y, centerOffsetZ).
+ * Build gable roof meshes: beregner gesims og møne, legger takflaten som quad mellom dem.
+ * centerOffsetX/Z: world position for block center (multi-block).
  */
 function buildRoofMeshes(roofSpec, topElevation, width, depth, centerOffsetX = 0, centerOffsetZ = 0) {
     const meshes = [];
-    if (!roofSpec || roofSpec.type !== 'gable') return meshes;
+    const geom = computeRoofGeometry(roofSpec, width, depth);
+    if (!geom) return meshes;
+
     const scale = 0.001;
-    const pitch = (roofSpec.pitch_degrees ?? 35) * Math.PI / 180;
-    const overhang = (roofSpec.overhang_mm ?? 500) * scale;
-    const ridgeOffsetMm = roofSpec.ridge_offset_mm ?? 0;
-    const ridgeMode = roofSpec.ridge_mode ?? 'equal_pitch';
-    const ridgeDir = roofSpec.ridge_direction ?? 'x';
-    
-    const mat = new THREE.MeshLambertMaterial({ color: 0x8b4513, side: THREE.DoubleSide });
-    
-    const w = width * scale;
-    const d = depth * scale;
-    const wWithOverhang = w + overhang * 2;
-    const dWithOverhang = d + overhang * 2;
-    
+    const overhang = geom.overhangMm * scale;
+    const w = geom.wMm * scale;
+    const d = geom.dMm * scale;
     const ox = centerOffsetX;
     const oz = centerOffsetZ;
-    
-    if (ridgeDir === 'x') {
-        const ridgeOffsetScaled = ridgeOffsetMm * scale;
-        const ridgeZ = ridgeOffsetScaled;
-        const distNorth = d / 2 + ridgeZ;
-        const distSouth = d / 2 - ridgeZ;
-        
-        let ridgeHeight, eaveElevNorth, eaveElevSouth, pitchNorth, pitchSouth;
-        if (ridgeMode === 'equal_pitch') {
-            pitchNorth = pitch;
-            pitchSouth = pitch;
-            const maxDist = Math.max(distNorth, distSouth);
-            ridgeHeight = Math.tan(pitch) * maxDist;
-            const ridgeAbsoluteY = topElevation + ridgeHeight;
-            eaveElevNorth = ridgeAbsoluteY - Math.tan(pitch) * distNorth;
-            eaveElevSouth = ridgeAbsoluteY - Math.tan(pitch) * distSouth;
-        } else {
-            eaveElevNorth = topElevation;
-            eaveElevSouth = topElevation;
-            const ridgeHeightNorth = Math.tan(pitch) * distNorth;
-            const ridgeHeightSouth = Math.tan(pitch) * distSouth;
-            ridgeHeight = Math.max(ridgeHeightNorth, ridgeHeightSouth);
-            pitchNorth = Math.atan(ridgeHeight / distNorth);
-            pitchSouth = Math.atan(ridgeHeight / distSouth);
-        }
-        
-        const overhangSlopeLenNorth = overhang / Math.cos(pitchNorth);
-        const overhangSlopeLenSouth = overhang / Math.cos(pitchSouth);
-        
-        const riseNorth = Math.tan(pitchNorth) * distNorth;
-        const slopeLenNorth = Math.sqrt(distNorth * distNorth + riseNorth * riseNorth);
-        const totalSlopeLenNorth = slopeLenNorth + overhangSlopeLenNorth;
-        const planeNorth = new THREE.PlaneGeometry(wWithOverhang, totalSlopeLenNorth);
-        const meshNorth = new THREE.Mesh(planeNorth, mat.clone());
-        meshNorth.rotation.x = Math.PI / 2 - pitchNorth;
-        const zEaveNorth = ridgeZ - distNorth;
-        const zEaveNorthWithOverhang = zEaveNorth - overhang;
-        const centerZNorth = (ridgeZ + zEaveNorthWithOverhang) / 2;
+    const roofColor = ROOF_MATERIAL_COLORS[roofSpec.material] ?? 0x8b4513;
+    const mat = new THREE.MeshLambertMaterial({ color: roofColor, side: THREE.DoubleSide });
+
+    const ridgeHeight = geom.ridgeHeightMm * scale;
+    const ridgeY = topElevation + ridgeHeight;
+
+    if (geom.ridgeDir === 'x') {
+        const ridgeZ = geom.ridgeZMm * scale;
+        const distNorth = geom.distNorthMm * scale;
+        const distSouth = geom.distSouthMm * scale;
+        const pitchNorth = geom.pitchNorthRad;
+        const pitchSouth = geom.pitchSouthRad;
+        const riseNorth = geom.riseNorthMm * scale;
+        const riseSouth = geom.riseSouthMm * scale;
+        const eaveElevNorth = topElevation + ridgeHeight - riseNorth;
+        const eaveElevSouth = topElevation + ridgeHeight - riseSouth;
         const yEaveNorthWithOverhang = eaveElevNorth - overhang * Math.tan(pitchNorth);
-        const yRidgeNorth = eaveElevNorth + riseNorth;
-        const centerYNorth = (yRidgeNorth + yEaveNorthWithOverhang) / 2;
-        meshNorth.position.set(ox, centerYNorth, oz + centerZNorth);
-        meshes.push(meshNorth);
-        
-        const riseSouth = Math.tan(pitchSouth) * distSouth;
-        const slopeLenSouth = Math.sqrt(distSouth * distSouth + riseSouth * riseSouth);
-        const totalSlopeLenSouth = slopeLenSouth + overhangSlopeLenSouth;
-        const planeSouth = new THREE.PlaneGeometry(wWithOverhang, totalSlopeLenSouth);
-        const meshSouth = new THREE.Mesh(planeSouth, mat.clone());
-        meshSouth.rotation.x = -(Math.PI / 2 - pitchSouth);
-        const zEaveSouth = ridgeZ + distSouth;
-        const zEaveSouthWithOverhang = zEaveSouth + overhang;
-        const centerZSouth = (ridgeZ + zEaveSouthWithOverhang) / 2;
         const yEaveSouthWithOverhang = eaveElevSouth - overhang * Math.tan(pitchSouth);
-        const yRidgeSouth = eaveElevSouth + riseSouth;
-        const centerYSouth = (yRidgeSouth + yEaveSouthWithOverhang) / 2;
-        meshSouth.position.set(ox, centerYSouth, oz + centerZSouth);
-        meshes.push(meshSouth);
-        
+
+        const zEaveNorth = ridgeZ - distNorth - overhang;
+        const zEaveSouth = ridgeZ + distSouth + overhang;
+
+        const ridgeNorth0 = new THREE.Vector3(ox - w / 2 - overhang, ridgeY, oz + ridgeZ);
+        const ridgeNorth1 = new THREE.Vector3(ox + w / 2 + overhang, ridgeY, oz + ridgeZ);
+        const eaveNorth0 = new THREE.Vector3(ox - w / 2 - overhang, yEaveNorthWithOverhang, oz + zEaveNorth);
+        const eaveNorth1 = new THREE.Vector3(ox + w / 2 + overhang, yEaveNorthWithOverhang, oz + zEaveNorth);
+        meshes.push(new THREE.Mesh(roofQuadGeometry(ridgeNorth0, ridgeNorth1, eaveNorth1, eaveNorth0), mat.clone()));
+
+        const ridgeSouth0 = new THREE.Vector3(ox + w / 2 + overhang, ridgeY, oz + ridgeZ);
+        const ridgeSouth1 = new THREE.Vector3(ox - w / 2 - overhang, ridgeY, oz + ridgeZ);
+        const eaveSouth0 = new THREE.Vector3(ox + w / 2 + overhang, yEaveSouthWithOverhang, oz + zEaveSouth);
+        const eaveSouth1 = new THREE.Vector3(ox - w / 2 - overhang, yEaveSouthWithOverhang, oz + zEaveSouth);
+        meshes.push(new THREE.Mesh(roofQuadGeometry(ridgeSouth0, ridgeSouth1, eaveSouth1, eaveSouth0), mat.clone()));
+
+        const ridgeLineGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(ox - w / 2, ridgeY, oz + ridgeZ),
+            new THREE.Vector3(ox + w / 2, ridgeY, oz + ridgeZ),
+        ]);
+        meshes.push(new THREE.Line(ridgeLineGeo, new THREE.LineBasicMaterial({ color: 0x4a3728 })));
     } else {
-        const ridgeOffsetScaled = ridgeOffsetMm * scale;
-        const ridgeX = ridgeOffsetScaled;
-        const distWest = w / 2 + ridgeX;
-        const distEast = w / 2 - ridgeX;
-        
-        let ridgeHeight, eaveElevWest, eaveElevEast, pitchWest, pitchEast;
-        if (ridgeMode === 'equal_pitch') {
-            pitchWest = pitch;
-            pitchEast = pitch;
-            const maxDist = Math.max(distWest, distEast);
-            ridgeHeight = Math.tan(pitch) * maxDist;
-            const ridgeAbsoluteY = topElevation + ridgeHeight;
-            eaveElevWest = ridgeAbsoluteY - Math.tan(pitch) * distWest;
-            eaveElevEast = ridgeAbsoluteY - Math.tan(pitch) * distEast;
-        } else {
-            eaveElevWest = topElevation;
-            eaveElevEast = topElevation;
-            const ridgeHeightWest = Math.tan(pitch) * distWest;
-            const ridgeHeightEast = Math.tan(pitch) * distEast;
-            ridgeHeight = Math.max(ridgeHeightWest, ridgeHeightEast);
-            pitchWest = Math.atan(ridgeHeight / distWest);
-            pitchEast = Math.atan(ridgeHeight / distEast);
-        }
-        
-        const overhangSlopeLenWest = overhang / Math.cos(pitchWest);
-        const overhangSlopeLenEast = overhang / Math.cos(pitchEast);
-        
-        const riseWest = Math.tan(pitchWest) * distWest;
-        const slopeLenWest = Math.sqrt(distWest * distWest + riseWest * riseWest);
-        const totalSlopeLenWest = slopeLenWest + overhangSlopeLenWest;
-        const planeWest = new THREE.PlaneGeometry(totalSlopeLenWest, dWithOverhang);
-        const meshWest = new THREE.Mesh(planeWest, mat.clone());
-        meshWest.rotation.z = -(Math.PI / 2 - pitchWest);
-        const xEaveWest = ridgeX - distWest;
-        const xEaveWestWithOverhang = xEaveWest - overhang;
-        const centerXWest = (ridgeX + xEaveWestWithOverhang) / 2;
+        const ridgeX = geom.ridgeXMm * scale;
+        const distWest = geom.distWestMm * scale;
+        const distEast = geom.distEastMm * scale;
+        const pitchWest = geom.pitchWestRad;
+        const pitchEast = geom.pitchEastRad;
+        const riseWest = geom.riseWestMm * scale;
+        const riseEast = geom.riseEastMm * scale;
+        const eaveElevWest = topElevation + ridgeHeight - riseWest;
+        const eaveElevEast = topElevation + ridgeHeight - riseEast;
         const yEaveWestWithOverhang = eaveElevWest - overhang * Math.tan(pitchWest);
-        const yRidgeWest = eaveElevWest + riseWest;
-        const centerYWest = (yRidgeWest + yEaveWestWithOverhang) / 2;
-        meshWest.position.set(ox + centerXWest, centerYWest, oz);
-        meshes.push(meshWest);
-        
-        const riseEast = Math.tan(pitchEast) * distEast;
-        const slopeLenEast = Math.sqrt(distEast * distEast + riseEast * riseEast);
-        const totalSlopeLenEast = slopeLenEast + overhangSlopeLenEast;
-        const planeEast = new THREE.PlaneGeometry(totalSlopeLenEast, dWithOverhang);
-        const meshEast = new THREE.Mesh(planeEast, mat.clone());
-        meshEast.rotation.z = Math.PI / 2 - pitchEast;
-        const xEaveEast = ridgeX + distEast;
-        const xEaveEastWithOverhang = xEaveEast + overhang;
-        const centerXEast = (ridgeX + xEaveEastWithOverhang) / 2;
         const yEaveEastWithOverhang = eaveElevEast - overhang * Math.tan(pitchEast);
-        const yRidgeEast = eaveElevEast + riseEast;
-        const centerYEast = (yRidgeEast + yEaveEastWithOverhang) / 2;
-        meshEast.position.set(ox + centerXEast, centerYEast, oz);
-        meshes.push(meshEast);
+
+        const xEaveWest = ridgeX - distWest - overhang;
+        const xEaveEast = ridgeX + distEast + overhang;
+
+        const ridgeWest0 = new THREE.Vector3(ox + ridgeX, ridgeY, oz - d / 2);
+        const ridgeWest1 = new THREE.Vector3(ox + ridgeX, ridgeY, oz + d / 2);
+        const eaveWest0 = new THREE.Vector3(ox + xEaveWest, yEaveWestWithOverhang, oz - d / 2 - overhang);
+        const eaveWest1 = new THREE.Vector3(ox + xEaveWest, yEaveWestWithOverhang, oz + d / 2 + overhang);
+        meshes.push(new THREE.Mesh(roofQuadGeometry(ridgeWest0, ridgeWest1, eaveWest1, eaveWest0), mat.clone()));
+
+        const ridgeEast0 = new THREE.Vector3(ox + ridgeX, ridgeY, oz + d / 2);
+        const ridgeEast1 = new THREE.Vector3(ox + ridgeX, ridgeY, oz - d / 2);
+        const eaveEast0 = new THREE.Vector3(ox + xEaveEast, yEaveEastWithOverhang, oz + d / 2 + overhang);
+        const eaveEast1 = new THREE.Vector3(ox + xEaveEast, yEaveEastWithOverhang, oz - d / 2 - overhang);
+        meshes.push(new THREE.Mesh(roofQuadGeometry(ridgeEast0, ridgeEast1, eaveEast1, eaveEast0), mat.clone()));
+
+        const ridgeLineGeo = new THREE.BufferGeometry().setFromPoints([
+            new THREE.Vector3(ox + ridgeX, ridgeY, oz - d / 2),
+            new THREE.Vector3(ox + ridgeX, ridgeY, oz + d / 2),
+        ]);
+        meshes.push(new THREE.Line(ridgeLineGeo, new THREE.LineBasicMaterial({ color: 0x4a3728 })));
     }
-    
+
     return meshes;
 }
 
@@ -338,9 +331,28 @@ export function rebuild3D(allFloors, roofSpec, plan) {
             }
         }
 
+        // Derived interior walls (rooms-first)
+        const walls = root.walls ?? [];
+        for (let wi = 0; wi < walls.length; wi++) {
+            const wall = walls[wi];
+            const a = wall.a ?? {};
+            const b = wall.b ?? {};
+            const ax = Number(a.x ?? 0);
+            const ay = Number(a.y ?? 0);
+            const bx = Number(b.x ?? 0);
+            const by = Number(b.y ?? 0);
+            const thicknessMm = Number(wall.thicknessMm ?? 98);
+            const heightMm = Number(wall.heightMm ?? root.wall?.height ?? 2700);
+            const mesh = wallSegmentMesh(ax, ay, bx, by, thicknessMm, heightMm, scale, blockOffsetX, blockOffsetZ, w, d, elev, plan, wall.materialId);
+            scene3d.add(mesh);
+            if (!meshByPath[path]) meshByPath[path] = [];
+            meshByPath[path].push(mesh);
+        }
+
         // For blocks: each block has its own roof – møne/raft beregnes, tak tegnes i forhold til blokkens senter
         if (hasBlocks && root.roof) {
-            const topY = elev + th;
+            const eaveMm = root.roof.eave_height_mm;
+            const topY = eaveMm != null ? eaveMm * scale : (elev + th);
             const roofMeshes = buildRoofMeshes(root.roof, topY, fp?.width ?? 8000, fp?.depth ?? 8000, blockOffsetX, blockOffsetZ);
             for (const m of roofMeshes) scene3d.add(m);
         }
@@ -353,7 +365,10 @@ export function rebuild3D(allFloors, roofSpec, plan) {
     // Global roof for non-block plans
     if (!hasBlocks && roofSpec && allFloors.length > 0) {
         const lastRoot = allFloors[allFloors.length - 1];
-        const topY = (lastRoot.elevation_mm ?? 0) * scale + (lastRoot.wall?.height ?? 2700) * scale;
+        const eaveMm = roofSpec.eave_height_mm;
+        const topY = eaveMm != null
+            ? eaveMm * scale
+            : (lastRoot.elevation_mm ?? 0) * scale + (lastRoot.wall?.height ?? 2700) * scale;
         const lastW = lastRoot.footprint?.width ?? 8000;
         const lastD = lastRoot.footprint?.depth ?? 8000;
         buildRoofMeshes(roofSpec, topY, lastW, lastD).forEach(m => scene3d.add(m));
